@@ -57,6 +57,9 @@ class MainActivity : ComponentActivity() {
     private var artistName by mutableStateOf("")
     private var artworkUrl by mutableStateOf<String?>(null)
     private var isLive by mutableStateOf(true)
+    private var currentPositionMs by mutableStateOf(0L)
+    private var durationMs by mutableStateOf(0L)
+    private var positionPollingJob: kotlinx.coroutines.Job? = null
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,9 +110,12 @@ class MainActivity : ComponentActivity() {
                                 artworkUrl = resolvedArtwork,
                                 isPlaying = isPlaying,
                                 isLive = isLive,
+                                currentPositionMs = currentPositionMs,
+                                durationMs = durationMs,
                                 onPlayPauseClick = { togglePlayPause() },
                                 onNextClick = { nextStation() },
                                 onPreviousClick = { previousStation() },
+                                onSeek = { seekTo(it) },
                                 hideNextPrevious = Config.hideNextPreviousButtons
                             )
                         }
@@ -169,6 +175,7 @@ class MainActivity : ComponentActivity() {
             controller.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(playing: Boolean) {
                     isPlaying = playing
+                    updatePositionPolling(controller)
                 }
 
                 override fun onMediaMetadataChanged(metadata: MediaMetadata) {
@@ -179,6 +186,8 @@ class MainActivity : ComponentActivity() {
 
                 override fun onEvents(player: Player, events: Player.Events) {
                     isLive = player.isCurrentMediaItemLive
+                    durationMs = player.duration.coerceAtLeast(0)
+                    currentPositionMs = player.currentPosition
                 }
             })
         }, MoreExecutors.directExecutor())
@@ -186,7 +195,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        positionPollingJob?.cancel()
         MediaController.releaseFuture(controllerFuture)
+    }
+
+    private fun updatePositionPolling(controller: MediaController) {
+        positionPollingJob?.cancel()
+        if (controller.isPlaying) {
+            positionPollingJob = lifecycleScope.launch {
+                while (true) {
+                    currentPositionMs = controller.currentPosition
+                    durationMs = controller.duration.coerceAtLeast(0)
+                    kotlinx.coroutines.delay(500)
+                }
+            }
+        }
     }
 
     private fun playStation(station: RadioStation) {
@@ -200,6 +223,14 @@ class MainActivity : ComponentActivity() {
             controller.setMediaItem(mediaItem)
             controller.prepare()
             controller.play()
+        }, MoreExecutors.directExecutor())
+    }
+
+    private fun seekTo(positionMs: Long) {
+        controllerFuture.addListener({
+            val controller = controllerFuture.get()
+            controller.seekTo(positionMs)
+            currentPositionMs = positionMs
         }, MoreExecutors.directExecutor())
     }
 

@@ -30,7 +30,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -38,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -54,9 +60,12 @@ fun NowPlayingScreen(
     artworkUrl: String?,
     isPlaying: Boolean,
     isLive: Boolean,
+    currentPositionMs: Long,
+    durationMs: Long,
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onPreviousClick: () -> Unit,
+    onSeek: (Long) -> Unit = {},
     onMoreClick: () -> Unit = {},
     hideNextPrevious: Boolean = false
 ) {
@@ -147,28 +156,61 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Divider area — fixed height so layout doesn't jump
+            // Scrubber / LIVE area — fixed height to prevent layout jumps
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(24.dp),
+                    .height(40.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (isLive) {
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.2f),
-                        thickness = 1.dp
-                    )
-                    Text(
-                        text = "LIVE",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0xFF2A2A2A))
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        HorizontalDivider(
+                            color = Color.White.copy(alpha = 0.2f),
+                            thickness = 1.dp
+                        )
+                        Text(
+                            text = "LIVE",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFF2A2A2A))
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                } else if (durationMs > 0) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        val fraction = if (durationMs > 0) {
+                            (currentPositionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                        } else 0f
+                        ScrubBar(
+                            fraction = fraction,
+                            onSeek = { newFraction ->
+                                onSeek((newFraction * durationMs).toLong())
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = formatTime(currentPositionMs),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SubtitleGray
+                            )
+                            Text(
+                                text = "-${formatTime(durationMs - currentPositionMs)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SubtitleGray
+                            )
+                        }
+                    }
                 }
             }
 
@@ -255,4 +297,75 @@ fun NowPlayingScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ScrubBar(
+    fraction: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val trackHeight = 4.dp
+    val thumbRadius = 6.dp
+    val totalHeight = thumbRadius * 2
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(totalHeight)
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    onSeek((offset.x / size.width).coerceIn(0f, 1f))
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, _ ->
+                    change.consume()
+                    onSeek((change.position.x / size.width).coerceIn(0f, 1f))
+                }
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val trackY = size.height / 2
+            val trackHeightPx = trackHeight.toPx()
+            val cornerRadius = CornerRadius(trackHeightPx / 2)
+
+            // Inactive track
+            drawRoundRect(
+                color = Color.White.copy(alpha = 0.3f),
+                topLeft = androidx.compose.ui.geometry.Offset(0f, trackY - trackHeightPx / 2),
+                size = Size(size.width, trackHeightPx),
+                cornerRadius = cornerRadius
+            )
+
+            // Active track
+            val activeWidth = size.width * fraction
+            if (activeWidth > 0f) {
+                drawRoundRect(
+                    color = Color.White,
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, trackY - trackHeightPx / 2),
+                    size = Size(activeWidth, trackHeightPx),
+                    cornerRadius = cornerRadius
+                )
+            }
+
+            // Thumb
+            val thumbX = activeWidth.coerceIn(thumbRadius.toPx(), size.width - thumbRadius.toPx())
+            drawCircle(
+                color = Color.White,
+                radius = thumbRadius.toPx(),
+                center = androidx.compose.ui.geometry.Offset(thumbX, trackY)
+            )
+        }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
 }
