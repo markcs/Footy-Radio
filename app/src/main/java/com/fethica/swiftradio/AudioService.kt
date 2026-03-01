@@ -1,5 +1,7 @@
 package com.fethica.swiftradio
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.net.Uri
 import android.os.SystemClock
@@ -35,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 class AudioService : MediaLibraryService() {
 
@@ -58,6 +61,9 @@ class AudioService : MediaLibraryService() {
     private var browseMediaItems: List<MediaItem> = emptyList()
     private val stationsLoaded = CompletableDeferred<Unit>()
 
+    // Cache local asset artwork as byte arrays so Android Auto can display them
+    private val artworkCache = mutableMapOf<String, ByteArray?>()
+
     companion object {
         private const val ROOT_ID = "root"
         private const val STATIONS_ID = "stations"
@@ -73,21 +79,46 @@ class AudioService : MediaLibraryService() {
                 
                 withContext(Dispatchers.Main) {
                     if (trackMetadataEquivalent(exoPlayer.playlistMetadata, parsedMetadata)) return@withContext
-                    Log.d(
-                        TAG,
-                        "Svc ICY metadata raw='$icyTitle' title='${parsedMetadata.title}' artist='${parsedMetadata.artist}'"
-                    )
+                    Log.d(TAG, "Svc ICY metadata raw='$icyTitle' title='${parsedMetadata.title}' artist='${parsedMetadata.artist}'")
+                    
+                    // Update global playlist metadata for the phone UI
                     exoPlayer.setPlaylistMetadata(parsedMetadata)
+                    
+                    // Update the currently playing MediaItem to force a UI refresh on Android Auto
+                    val currentItem = exoPlayer.currentMediaItem
+                    if (currentItem != null) {
+                        val baseStationMeta = currentItem.mediaMetadata
+                        val newMetadataBuilder = baseStationMeta.buildUpon()
+                            .setTitle(parsedMetadata.title ?: baseStationMeta.title)
+                        
+                        if (parsedMetadata.artist != null) {
+                            newMetadataBuilder.setArtist(parsedMetadata.artist)
+                        }
+
+                        // IMPORTANT: We must retain the original artwork URI and Data so Android Auto doesn't blank out
+                        if (baseStationMeta.artworkUri != null) {
+                            newMetadataBuilder.setArtworkUri(baseStationMeta.artworkUri)
+                        }
+                        if (baseStationMeta.artworkData != null) {
+                            newMetadataBuilder.setArtworkData(baseStationMeta.artworkData, baseStationMeta.artworkDataType)
+                        }
+                        
+                        val newItem = currentItem.buildUpon()
+                            .setMediaMetadata(newMetadataBuilder.build())
+                            .build()
+                            
+                        exoPlayer.replaceMediaItem(exoPlayer.currentMediaItemIndex, newItem)
+                    }
                 }
             }
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             val exoPlayer = player ?: return
-            Log.d(
-                TAG,
-                "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'"
-            )
+            // Ignore transitions caused purely by metadata updates (replaceMediaItem)
+            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
+
+            Log.d(TAG, "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
             if (!isEmptyTrackMetadata(exoPlayer.playlistMetadata)) {
@@ -109,12 +140,8 @@ class AudioService : MediaLibraryService() {
                 else -> "UNKNOWN"
             }
             val exoPlayer = player
-            Log.d(
-                TAG,
-                "Svc playback state=$stateName playWhenReady=${exoPlayer?.playWhenReady} isPlaying=${exoPlayer?.isPlaying}"
-            )
-            logAudioOutputState("state=$stateName")
-
+            Log.d(TAG, "Svc playback state=$stateName playWhenReady=${exoPlayer?.playWhenReady} isPlaying=${exoPlayer?.isPlaying}")
+            
             when (playbackState) {
                 Player.STATE_READY -> {
                     retryCount = 0
@@ -124,14 +151,12 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_BUFFERING -> scheduleBufferingRecovery()
                 Player.STATE_ENDED -> {
                     cancelStallRecovery()
-                    Log.w(TAG, "Svc playback ended; retrying current stream")
                     retryCurrentItem("state_ended")
                 }
                 Player.STATE_IDLE -> {
                     cancelBufferingRecovery()
                     cancelStallRecovery()
                     if (exoPlayer?.playWhenReady == true) {
-                        Log.w(TAG, "Svc entered IDLE while playWhenReady=true; retrying")
                         retryCurrentItem("state_idle")
                     }
                 }
@@ -140,18 +165,11 @@ class AudioService : MediaLibraryService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             val exoPlayer = player
-            Log.d(
-                TAG,
-                "Svc isPlaying=$isPlaying playWhenReady=${exoPlayer?.playWhenReady} " +
-                    "suppression=${exoPlayer?.playbackSuppressionReason}"
-            )
-            logAudioOutputState("isPlaying=$isPlaying")
             if (!isPlaying &&
                 exoPlayer?.playWhenReady == true &&
                 exoPlayer.playbackState == Player.STATE_READY &&
                 exoPlayer.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
             ) {
-                Log.w(TAG, "Svc ready but not playing (no suppression); retrying stream")
                 retryCurrentItem("ready_not_playing")
                 return
             }
@@ -161,12 +179,7 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-            Log.d(TAG, "Svc playWhenReady=$playWhenReady reason=$reason")
-            if (playWhenReady) {
-                startStallRecovery()
-            } else {
-                cancelStallRecovery()
-            }
+            if (playWhenReady) startStallRecovery() else cancelStallRecovery()
         }
     }
 
@@ -200,13 +213,9 @@ class AudioService : MediaLibraryService() {
             params: LibraryParams?
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
             if (parentId != ROOT_ID && parentId != STATIONS_ID) {
-                return Futures.immediateFuture(
-                    LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
-                )
+                return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
             }
-            return Futures.immediateFuture(
-                LibraryResult.ofItemList(browseMediaItems, params)
-            )
+            return Futures.immediateFuture(LibraryResult.ofItemList(browseMediaItems, params))
         }
 
         override fun onGetItem(
@@ -215,9 +224,7 @@ class AudioService : MediaLibraryService() {
             mediaId: String
         ): ListenableFuture<LibraryResult<MediaItem>> {
             val item = browseMediaItems.firstOrNull { it.mediaId == mediaId }
-                ?: return Futures.immediateFuture(
-                    LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE)
-                )
+                ?: return Futures.immediateFuture(LibraryResult.ofError(LibraryResult.RESULT_ERROR_BAD_VALUE))
             return Futures.immediateFuture(LibraryResult.ofItem(item, null))
         }
 
@@ -260,13 +267,10 @@ class AudioService : MediaLibraryService() {
             .build()
         exoPlayer.setAudioAttributes(audioAttributes, true)
         exoPlayer.volume = 1f
-        
-        // Loop playlist when requested from Android Auto so prev/next works infinitely
         exoPlayer.repeatMode = Player.REPEAT_MODE_ALL
-
         exoPlayer.addListener(playerListener)
         player = exoPlayer
-        logAudioOutputState("onCreate")
+        
         mediaSession = MediaLibrarySession.Builder(this, exoPlayer, libraryCallback).build()
 
         loadStationsForBrowse()
@@ -300,19 +304,18 @@ class AudioService : MediaLibraryService() {
                 val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
                 stations = repository.loadStations(remoteUrl)
                 browseMediaItems = stations.mapIndexed { index, station ->
-                    val imageUrl = station.resolvedImageUrl
+                    val metadataBuilder = MediaMetadata.Builder()
+                        .setTitle(station.name)
+                        .setArtist(station.desc)
+                        .setIsBrowsable(false)
+                        .setIsPlayable(true)
+                        .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+                        
+                    applyArtworkToMetadata(station.resolvedImageUrl, metadataBuilder)
+                        
                     MediaItem.Builder()
                         .setMediaId("station_$index")
-                        .setMediaMetadata(
-                            MediaMetadata.Builder()
-                                .setTitle(station.name)
-                                .setArtist(station.desc)
-                                .setArtworkUri(if (imageUrl.isNotBlank()) Uri.parse(imageUrl) else null)
-                                .setIsBrowsable(false)
-                                .setIsPlayable(true)
-                                .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
-                                .build()
-                        )
+                        .setMediaMetadata(metadataBuilder.build())
                         .build()
                 }
             } catch (e: Exception) {
@@ -333,24 +336,54 @@ class AudioService : MediaLibraryService() {
             .takeIf { it >= 0 } ?: 0
 
         val playableItems = stations.mapIndexed { index, station ->
-            val imageUrl = station.resolvedImageUrl
+            val metadataBuilder = MediaMetadata.Builder()
+                .setTitle(station.name)
+                .setArtist(station.desc)
+                .setIsPlayable(true)
+                
+            applyArtworkToMetadata(station.resolvedImageUrl, metadataBuilder)
+
             MediaItem.Builder()
                 .setMediaId("station_$index")
                 .setUri(station.streamURL)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(station.name)
-                        .setArtist(station.desc)
-                        .setArtworkUri(if (imageUrl.isNotBlank()) Uri.parse(imageUrl) else null)
-                        .setIsPlayable(true)
-                        .build()
-                )
+                .setMediaMetadata(metadataBuilder.build())
                 .build()
         }
 
-        val reordered = playableItems.subList(selectedIndex, playableItems.size) +
+        return playableItems.subList(selectedIndex, playableItems.size) +
             playableItems.subList(0, selectedIndex)
-        return reordered
+    }
+
+    /**
+     * Android Auto cannot read "file:///android_asset/". 
+     * To fix this, we load the asset as a Bitmap byte array and embed it directly in the metadata.
+     */
+    private fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder) {
+        if (imageUrl.startsWith("http")) {
+            // Android Auto can download HTTP URLs
+            builder.setArtworkUri(Uri.parse(imageUrl))
+        } else if (imageUrl.startsWith("file:///android_asset/")) {
+            // Extract file name and load bitmap into memory
+            val assetName = imageUrl.replace("file:///android_asset/", "")
+            
+            val bytes = artworkCache.getOrPut(assetName) {
+                try {
+                    val inputStream = assets.open(assetName)
+                    val bitmap = BitmapFactory.decodeStream(inputStream)
+                    val outputStream = ByteArrayOutputStream()
+                    // Compress to reduce IPC transaction size (critical for Android Auto)
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                    outputStream.toByteArray()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to load asset artwork for Android Auto: $assetName", e)
+                    null
+                }
+            }
+            
+            if (bytes != null) {
+                builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            }
+        }
     }
 
     private fun extractIcyTitle(metadata: Metadata): String? {
@@ -408,13 +441,6 @@ class AudioService : MediaLibraryService() {
             else -> 3000L
         }
 
-        val currentIndex = exoPlayer.currentMediaItemIndex.coerceAtLeast(0)
-        val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri
-        Log.w(
-            TAG,
-            "Svc retry stream reason=$reason attempt=$retryCount delayMs=$delayMs index=$currentIndex uri='$currentUri'"
-        )
-
         cancelRetry()
         retryJob = serviceScope.launch {
             delay(delayMs)
@@ -439,7 +465,6 @@ class AudioService : MediaLibraryService() {
             delay(15_000L)
             val exoPlayer = player ?: return@launch
             if (exoPlayer.playbackState == Player.STATE_BUFFERING && exoPlayer.playWhenReady) {
-                Log.w(TAG, "Svc buffering timeout; retrying current stream")
                 retryCurrentItem("buffer_timeout")
             }
         }
@@ -461,21 +486,17 @@ class AudioService : MediaLibraryService() {
 
             val nowRealtime = SystemClock.elapsedRealtime()
             val currentPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
-            val positionAdvanced = currentPosition > lastObservedPositionMs + 250L
-            if (positionAdvanced) {
+            if (currentPosition > lastObservedPositionMs + 250L) {
                 lastObservedPositionMs = currentPosition
                 lastPositionRealtimeMs = nowRealtime
                 scheduleStallCheck()
                 return@launch
             }
 
-            val stagnantForMs = nowRealtime - lastPositionRealtimeMs
-            if (stagnantForMs >= 15_000L) {
-                Log.w(TAG, "Svc playback stall detected at position=$currentPosition; retrying stream")
+            if (nowRealtime - lastPositionRealtimeMs >= 15_000L) {
                 retryCurrentItem("stall_ready")
                 return@launch
             }
-
             scheduleStallCheck()
         }
     }
