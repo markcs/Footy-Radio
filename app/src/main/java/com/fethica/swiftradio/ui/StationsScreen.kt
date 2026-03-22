@@ -31,6 +31,9 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.Indicator
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,12 +78,15 @@ fun StationsScreen(
     isPlaying: Boolean,
     isBuffering: Boolean = false,
     isError: Boolean = false,
+    isRefreshing: Boolean = false,
     showMiniPlayer: Boolean,
     onStationClick: (RadioStation) -> Unit,
+    onRefresh: () -> Unit = {},
     onAboutClick: () -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
 
     val filteredStations = remember(searchQuery, stations) {
         if (searchQuery.isBlank()) {
@@ -152,10 +158,24 @@ fun StationsScreen(
                     )
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    state = pullToRefreshState,
+                    modifier = Modifier.weight(1f),
+                    indicator = {
+                        Indicator(
+                            modifier = Modifier.align(Alignment.TopCenter),
+                            isRefreshing = isRefreshing,
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            color = MaterialTheme.colorScheme.primary,
+                            state = pullToRefreshState
+                        )
+                    }
+                ) {
                     if (isError) {
                         Column(
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
@@ -166,11 +186,13 @@ fun StationsScreen(
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
-                    } else if (stations.isEmpty()) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    } else if (stations.isEmpty() && !isRefreshing) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.Center),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),

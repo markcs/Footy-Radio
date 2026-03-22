@@ -145,6 +145,7 @@ class MainActivity : ComponentActivity() {
                                 isPlaying = state.isPlaying,
                                 isBuffering = state.isBuffering,
                                 isError = state.isError,
+                                isRefreshing = state.isRefreshing,
                                 showMiniPlayer = state.currentStation != null,
                                 onStationClick = { station ->
                                     vm.playStation(station)
@@ -152,6 +153,7 @@ class MainActivity : ComponentActivity() {
                                         bottomSheetState.partialExpand()
                                     }
                                 },
+                                onRefresh = { vm.refreshStations() },
                                 onAboutClick = { showAbout = true }
                             )
 

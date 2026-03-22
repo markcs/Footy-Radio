@@ -39,7 +39,8 @@ data class PlayerUiState(
     val artworkUrl: String? = null,
     val isLive: Boolean = true,
     val durationMs: Long = 0L,
-    val isError: Boolean = false
+    val isError: Boolean = false,
+    val isRefreshing: Boolean = false
 )
 
 private data class RawPlaybackState(
@@ -468,6 +469,24 @@ class PlayerViewModel(
         currentArtworkLookupTerm = ""
         artworkLookupJob?.cancel()
         uiState = uiState.copy(trackTitle = "", artistName = "", artworkUrl = null)
+    }
+
+    fun refreshStations() {
+        viewModelScope.launch {
+            uiState = uiState.copy(isRefreshing = true)
+            try {
+                val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
+                uiState = uiState.copy(
+                    stations = stationsRepository.loadStations(remoteUrl),
+                    isError = false,
+                    isRefreshing = false
+                )
+                stationMediaItems = buildMediaItems(uiState.stations)
+            } catch (e: Exception) {
+                Log.e("SwiftRadio", "Failed to load stations", e)
+                uiState = uiState.copy(isError = true, isRefreshing = false)
+            }
+        }
     }
 
     private fun loadStations() {
