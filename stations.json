@@ -1,0 +1,21 @@
+{
+    "station":
+    [
+        {
+            "name": "Triple M Melbourne",
+            "website": "https://triplem.listnr.com",
+            "streamURL": "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8",
+            "imageURL": "station-mmm",
+            "desc": "Rocks, Sport, and Good Times",
+            "longDesc": "Rocks, Sport, and Good Times"
+        },
+        {
+            "name": "SEN",
+            "website": "https://www.sen.com.au",
+            "streamURL": "http://13.54.221.214:8000/sen.mp3",
+            "imageURL": "station-sen",
+            "desc": "Sports Network",
+            "longDesc": "SEN 1116 AM - Melbourne, VIC. 3AK SEN 1116 AM - Melbourne, Victoria"
+        }
+    ]
+}
