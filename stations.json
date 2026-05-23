@@ -18,12 +18,20 @@
             "longDesc": "SEN 1116 AM - Melbourne, VIC. 3AK SEN 1116 AM - Melbourne, Victoria"
         },
         {
+            "name": "3AW",
+            "website": "https://www.3aw.com.au",
+            "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.mp3",
+            "imageURL": "https://www.3aw.com.au/wp-content/themes/3aw/assets/img/favicon/apple-touch-icon.png",
+            "desc": "Melbournes own",
+            "longDesc": "If Melbourne's talking about it, we're talking about it"
+        },
+        {
             "name": "ABC Melbourne",
             "website": "https://abc.net.au",
             "streamURL": "https://live-radio01.mediahubaustralia.com/3LRW/aac/",
             "imageURL": "https://image.winudf.com/v2/image/Y29tLnJhZGlvb25saW5lZnJlZS5hYmNyYWRpbzc3NF9pY29uXzE1Mjg0MTUyODZfMDc5/icon.png?w=130&fakeurl=1&type=.png",
             "desc": "ABC Radio Melbourne 774",
             "longDesc": "News, Sport and Weather"
-        }        
+        }
     ]
 }
