@@ -95,7 +95,6 @@ class AudioService : MediaLibraryService() {
                             newMetadataBuilder.setArtist(parsedMetadata.artist)
                         }
 
-                        // IMPORTANT: We must retain the original artwork URI and Data so Android Auto doesn't blank out
                         if (baseStationMeta.artworkUri != null) {
                             newMetadataBuilder.setArtworkUri(baseStationMeta.artworkUri)
                         }
@@ -253,10 +252,17 @@ class AudioService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Use a standard web browser User-Agent to bypass 403 Forbidden on servers like Live365
+        val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(userAgent)
             .setDefaultRequestProperties(mapOf("Icy-MetaData" to "1"))
+
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -265,6 +271,7 @@ class AudioService : MediaLibraryService() {
         val exoPlayer = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
+
         exoPlayer.setAudioAttributes(audioAttributes, true)
         exoPlayer.volume = 1f
         exoPlayer.repeatMode = Player.REPEAT_MODE_ALL
@@ -362,6 +369,7 @@ class AudioService : MediaLibraryService() {
         if (imageUrl.startsWith("http")) {
             // Android Auto can download HTTP URLs
             builder.setArtworkUri(Uri.parse(imageUrl))
+            builder.setArtworkData(null, null)
         } else if (imageUrl.startsWith("file:///android_asset/")) {
             // Extract file name and load bitmap into memory
             val assetName = imageUrl.replace("file:///android_asset/", "")
@@ -382,6 +390,7 @@ class AudioService : MediaLibraryService() {
             
             if (bytes != null) {
                 builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                builder.setArtworkUri(null)
             }
         }
     }
