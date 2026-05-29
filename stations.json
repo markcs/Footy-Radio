@@ -4,6 +4,14 @@
         {
             "name": "Triple M Melbourne",
             "website": "https://triplem.listnr.com",
+            "streamURL": "http://legacy.scahw.com.au/4mmm_32",
+            "imageURL": "https://triplem.listnr.com/wp-content/uploads/2024/04/mmm-melbourne.jpg",
+            "desc": "Triple M rocks footy",
+            "longDesc": "Rock, Sport, and Good Times"
+        },
+        {
+            "name": "Triple M Melbourne (HLS)",
+            "website": "https://triplem.listnr.com",
             "streamURL": "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8",
             "imageURL": "https://triplem.listnr.com/wp-content/uploads/2024/04/mmm-melbourne.jpg",
             "desc": "Triple M rocks footy",
