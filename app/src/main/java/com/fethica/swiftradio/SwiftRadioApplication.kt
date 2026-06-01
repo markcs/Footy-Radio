@@ -18,7 +18,10 @@ class SwiftRadioApplication : Application(), SingletonImageLoader.Factory {
     val applicationScope = CoroutineScope(applicationJob + Dispatchers.Main)
 
     val sharedOkHttpClient: OkHttpClient by lazy {
-        OkHttpClient.Builder().build()
+        OkHttpClient.Builder()
+            .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
     }
 
     val stationsRepository: StationsRepository by lazy {
