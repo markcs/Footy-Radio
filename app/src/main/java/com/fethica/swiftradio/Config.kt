@@ -11,7 +11,7 @@ object Config {
     const val hideNextPreviousButtons = false
     const val enableSearch = true // Toggle to show/hide search bar on the Stations Screen
 
-    const val email = "contact@fethica.com"
+    const val email = "contact@campbellsmith.me"
     const val feedbackURL = "https://fethica.com/#contact"
     const val licenseURL = "https://raw.githubusercontent.com/fethica/Swift-Radio-Android/refs/heads/main/LICENSE"
     const val shareText = "Check out Footy Radio!"

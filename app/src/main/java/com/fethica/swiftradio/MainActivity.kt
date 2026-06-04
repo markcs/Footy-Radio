@@ -105,6 +105,10 @@ class MainActivity : ComponentActivity() {
                     bottomSheetState = bottomSheetState
                 )
 
+                LaunchedEffect(bottomSheetState.currentValue) {
+                    vm.setScreenActive(bottomSheetState.currentValue == SheetValue.Expanded)
+                }
+
                 if (showAbout) {
                     AboutScreen(onBack = { showAbout = false })
                 } else {

@@ -73,7 +73,7 @@ object Config {
     const val stationsURL = "https://..."         // remote stations JSON URL
     const val hideNextPreviousButtons = false      // hide skip controls on the player
     const val enableSearch = true                  // show/hide search bar on station list
-    const val email = "contact@example.com"
+    const val email = "contact@campbellsmith.me"
     const val feedbackURL = "https://..."
     const val shareText = "Check out Swift Radio!"
 }
@@ -103,9 +103,9 @@ Android will automatically use the correct language based on the user's device s
 
 A single-station version is coming soon. It will be bundled with the [iOS single-station version](https://payhip.com/b/x15QB) for the same price. Updates will be posted here when it's ready.
 
-For custom work or more advanced needs, reach out to [Fethi](mailto:contact@fethica.com).
+For custom work or more advanced needs, reach out to [Fethi](mailto:contact@campbellsmith.me).
 
-**Built something with Swift Radio?** Drop us a line at [contact@fethica.com](mailto:contact@fethica.com).
+**Built something with Swift Radio?** Drop us a line at [contact@campbellsmith.me](mailto:contact@campbellsmith.me).
 
 ## Credits
 

@@ -50,6 +50,7 @@ data class PlayerUiState(
 
 private data class RawPlaybackState(
     val playWhenReady: Boolean = false,
+    val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val mediaId: String? = null,
     val metadata: MediaMetadata = MediaMetadata.Builder().build(),
@@ -93,6 +94,7 @@ class PlayerViewModel(
     private var artworkLookupJob: Job? = null
     private var lastObservedMediaId: String? = null
     private var positionPollingJob: Job? = null
+    private var squiggleJob: Job? = null
     private var lastKnownMetadata: MediaMetadata = MediaMetadata.Builder().build()
 
     private val playerListener = object : Player.Listener {
@@ -144,14 +146,6 @@ class PlayerViewModel(
     init {
         observeRawState()
         loadStations()
-
-        viewModelScope.launch {
-            squiggleService.liveScore.collect { score ->
-                if (uiState.liveScore != score) {
-                    uiState = uiState.copy(liveScore = score)
-                }
-            }
-        }
     }
 
     // --- Public API ---
@@ -309,6 +303,7 @@ class PlayerViewModel(
         
         _rawState.value = RawPlaybackState(
             playWhenReady = controller.playWhenReady,
+            isPlaying = controller.isPlaying,
             isBuffering = controller.playWhenReady &&
                 (controller.playbackState == Player.STATE_BUFFERING || controller.playbackState == Player.STATE_IDLE),
             mediaId = controller.currentMediaItem?.mediaId,
@@ -328,6 +323,29 @@ class PlayerViewModel(
                 currentPositionMs = active.currentPosition.coerceAtLeast(0)
                 delay(500)
             }
+        }
+    }
+
+    private var isPlayerScreenActive = false
+
+    fun setScreenActive(active: Boolean) {
+        if (isPlayerScreenActive == active) return
+        isPlayerScreenActive = active
+        
+        squiggleService.setScreenActive(active)
+        if (active) {
+            if (squiggleJob?.isActive == true) return
+            squiggleJob = viewModelScope.launch {
+                squiggleService.liveScore.collect { score ->
+                    if (uiState.liveScore != score) {
+                        uiState = uiState.copy(liveScore = score)
+                    }
+                }
+            }
+        } else {
+            squiggleJob?.cancel()
+            squiggleJob = null
+            uiState = uiState.copy(liveScore = null)
         }
     }
 
@@ -352,7 +370,7 @@ class PlayerViewModel(
                     isLive = raw.isLive,
                     durationMs = raw.durationMs
                 )
-
+                
                 // Only apply metadata when the intent is to play (not strictly audio outputting)
                 // This keeps defaults during initial connection/buffering
                 if (raw.playWhenReady) {

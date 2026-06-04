@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.core.content.pm.PackageInfoCompat
 import coil3.compose.AsyncImage
 import com.fethica.swiftradio.Config
 import com.fethica.swiftradio.R
@@ -72,7 +73,7 @@ fun AboutScreen(
     val context = LocalContext.current
     val appVersion = try {
         val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        "${pInfo.versionName} (${pInfo.longVersionCode})"
+        "${pInfo.versionName} (${PackageInfoCompat.getLongVersionCode(pInfo)})"
     } catch (_: Exception) {
         "1.0"
     }
