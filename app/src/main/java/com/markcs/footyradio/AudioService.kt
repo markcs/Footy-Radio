@@ -509,7 +509,7 @@ class AudioService : MediaLibraryService() {
     private fun isJunkMetadata(text: CharSequence?): Boolean {
         if (text == null) return false
         val s = text.toString().lowercase()
-        return s.contains("asset spot") || s.contains("asset link")
+        return s.contains("asset spot") || s.contains("asset link") || s.contains("asset stop")
     }
 
     private fun getCurrentStationName(): String? {
