@@ -438,30 +438,45 @@ class AudioService : MediaLibraryService() {
             val manifestMeta = currentManifestMetadata
             
             val currentItem = activePlayer.currentMediaItem ?: return@launch
-            val streamMeta = currentItem.mediaMetadata
+            val stationName = getCurrentStationName()
             
-            // Filter out Triple M's useless HLS metadata that changes every 5 seconds.
-            // This prevents Resource 6 errors caused by constant codec re-allocations.
-            if (icyTitle == null && liveScore == null && manifestMeta == null && 
-                streamMeta.title?.toString()?.startsWith("Asset Link") == true) {
-                return@launch
-            }
-
-            val parsedIcyMeta = if (!icyTitle.isNullOrBlank()) {
+            // Filter out junk metadata early
+            val parsedIcyMeta = if (!icyTitle.isNullOrBlank() && !isJunkMetadata(icyTitle)) {
                 buildTrackMetadataFromIcy(icyTitle)
             } else {
                 MediaMetadata.Builder().build()
             }
             
-            // Priority: 1. Live Scores, 2. ICY Metadata, 3. Manifest Metadata, 4. Stream ID3 Metadata
-            val displayTitle = liveScore 
+            val filteredManifestMeta = if (manifestMeta != null && !isJunkMetadata(manifestMeta.title)) {
+                manifestMeta
+            } else {
+                null
+            }
+
+            // Priority: 1. Live Scores, 2. ICY Metadata, 3. Manifest Metadata
+            var displayTitle = liveScore 
                 ?: parsedIcyMeta.title?.toString() 
-                ?: manifestMeta?.title?.toString()
+                ?: filteredManifestMeta?.title?.toString()
                 
-            val displayArtist = if (liveScore != null) {
+            var displayArtist = if (liveScore != null) {
                 "" // Hide artist when showing scores
             } else {
-                parsedIcyMeta.artist?.toString() ?: manifestMeta?.artist?.toString()
+                parsedIcyMeta.artist?.toString() ?: filteredManifestMeta?.artist?.toString()
+            }
+
+            // Fallback to base stream metadata if we have nothing yet
+            if (displayTitle.isNullOrBlank()) {
+                val baseMeta = basePlayer?.currentMediaItem?.mediaMetadata
+                if (baseMeta != null && !isJunkMetadata(baseMeta.title)) {
+                    displayTitle = baseMeta.title?.toString()
+                    displayArtist = baseMeta.artist?.toString()
+                }
+            }
+
+            // Final fallback: if it's junk or still null, use station name
+            if (displayTitle.isNullOrBlank() || isJunkMetadata(displayTitle)) {
+                displayTitle = stationName
+                displayArtist = "" 
             }
             
             // Update global playlist metadata for the phone UI
@@ -469,12 +484,19 @@ class AudioService : MediaLibraryService() {
                 .setTitle(displayTitle)
                 .setArtist(displayArtist)
                 .build()
+
+            // Optimization: avoid redundant updates if metadata hasn't changed
+            if (trackMetadataEquivalent(playlistMeta, activePlayer.playlistMetadata)) {
+                return@launch
+            }
+            
             activePlayer.setPlaylistMetadata(playlistMeta)
             
             // Use the ForwardingPlayer to update metadata without playlist churn
             val wrappedPlayer = player as? MetadataForwardingPlayer
             if (wrappedPlayer != null) {
                 // Only override if we have something better than the base stream metadata
+                // or if we specifically want to hide junk metadata with the station name.
                 if (displayTitle != null || displayArtist != null) {
                     wrappedPlayer.setOverrideMetadata(playlistMeta)
                 } else {
@@ -482,6 +504,23 @@ class AudioService : MediaLibraryService() {
                 }
             }
         }
+    }
+
+    private fun isJunkMetadata(text: CharSequence?): Boolean {
+        if (text == null) return false
+        val s = text.toString().lowercase()
+        return s.contains("asset spot") || s.contains("asset link")
+    }
+
+    private fun getCurrentStationName(): String? {
+        val mediaId = basePlayer?.currentMediaItem?.mediaId ?: return null
+        if (mediaId.startsWith("station_")) {
+            val index = mediaId.substringAfter("station_").toIntOrNull()
+            if (index != null && index in stations.indices) {
+                return stations[index].name
+            }
+        }
+        return null
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
