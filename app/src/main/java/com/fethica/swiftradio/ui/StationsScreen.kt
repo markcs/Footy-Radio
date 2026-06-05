@@ -198,7 +198,7 @@ fun StationsScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = if (showMiniPlayer) 80.dp else 0.dp)
                         ) {
-                            items(filteredStations, key = { it.streamURL }) { station ->
+                            items(filteredStations, key = { it.id }) { station ->
                                 StationRow(
                                     station = station,
                                     isCurrentStation = station == currentStation,

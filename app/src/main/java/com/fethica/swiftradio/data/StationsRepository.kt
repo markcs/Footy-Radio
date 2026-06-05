@@ -55,21 +55,25 @@ class StationsRepository(
         
         val extensions = listOf("png", "jpg", "jpeg")
         
-        stations.forEach { station ->
-            station.resolvedImageUrl = if (station.imageURL.startsWith("http")) {
-                station.imageURL
-            } else if (station.imageURL.isNotBlank()) {
-                // We'll trust the extensions and let Coil handle the fallback or use a default
-                val ext = if (station.imageURL == "station-absolutecountry" || 
-                    station.imageURL == "station-classicrock" || 
-                    station.imageURL == "station-therockfm") "jpg" else "png"
-                "file:///android_asset/${station.imageURL}.$ext"
-            } else {
-                "file:///android_asset/stationImage.png"
+        val uniqueStations = stations.mapIndexed { index, station ->
+            val finalId = if (station.id.isBlank()) "station_$index" else station.id
+            
+            station.copy(id = finalId).apply {
+                resolvedImageUrl = if (imageURL.startsWith("http")) {
+                    imageURL
+                } else if (imageURL.isNotBlank()) {
+                    // We'll trust the extensions and let Coil handle the fallback or use a default
+                    val ext = if (imageURL == "station-absolutecountry" || 
+                        imageURL == "station-classicrock" || 
+                        imageURL == "station-therockfm") "jpg" else "png"
+                    "file:///android_asset/${imageURL}.$ext"
+                } else {
+                    "file:///android_asset/stationImage.png"
+                }
             }
         }
         
-        stations
+        uniqueStations
     }
 
     private fun loadFromAssets(): List<RadioStation> {

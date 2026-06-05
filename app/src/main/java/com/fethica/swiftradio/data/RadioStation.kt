@@ -5,6 +5,7 @@ import kotlinx.serialization.Transient
 
 @Serializable
 data class RadioStation(
+    val id: String = "",
     val name: String,
     val streamURL: String,
     val imageURL: String,
