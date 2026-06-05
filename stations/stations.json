@@ -29,7 +29,7 @@
          "name": "KIIS 1011 - Melbourne - 101.1 FM",
          "website": "https://www.kiis1011.com.au/",
          "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/ARN_KIIS1011AAC.aac",
-         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/K1011.png?raw=true",
+         "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/K1011.png",
          "desc": "KIIS 1011 - Melbourne - 101.1 FM",
          "longDesc": ""
       },
@@ -50,6 +50,14 @@
          "longDesc": ""
       },
       {
+         "name": "774 ABC Melbourne",
+         "website": "https://abc.net.au/radio/melbourne/",
+         "streamURL": "http://live-radio01.mediahubaustralia.com/3LRW/mp3/;",
+         "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/ABC-774-Melbourne.png",
+         "desc": "774 ABC Melbourne",
+         "longDesc": ""
+      },		
+      {
          "name": "1116 SEN Melbourne",
          "website": "http://www.sen.com.au/",
          "streamURL": "http://13.54.221.214:8000/sen.mp3",
@@ -57,14 +65,6 @@
          "desc": "1116 SEN Melbourne",
          "longDesc": ""
       },		
-      {
-         "name": "774 ABC Melbourne",
-         "website": "https://abc.net.au/radio/melbourne/",
-         "streamURL": "http://live-radio01.mediahubaustralia.com/3LRW/mp3/;",
-         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/ABC-774-Melbourne.png?raw=true",
-         "desc": "774 ABC Melbourne",
-         "longDesc": ""
-      },
        {
          "name": "3AW",
          "website": "https://www.3aw.com.au",
@@ -77,7 +77,7 @@
          "name": "Triple M 80s",
          "website": "https://www.triplem.com.au/80s",
          "streamURL": "http://legacy.scahw.com.au/280s_32",
-         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/mmm-80s.jpg?raw=true",
+         "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/mmm-80s.jpg",
          "desc": "Triple M 80s",
          "longDesc": ""
       },
@@ -85,7 +85,7 @@
          "name": "Triple M 90s",
          "website": "https://www.triplem.com.au/90s",
          "streamURL": "http://legacy.scahw.com.au/290s_32",
-         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/mmm-90s.jpg?raw=true",
+         "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/mmm-90s.jpg",
          "desc": "Triple M 90s",
          "longDesc": ""
       },
@@ -101,7 +101,7 @@
          "name": "LiSTNR - Chill Pop Hits",
          "website": "https://play.listnr.com/station/chill-pop-hits",
          "streamURL": "https://sa46.scastream.com.au/live/7chillpophits_128.stream/playlist.m3u8",
-         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/chill_pop_hits.jpg?raw=true",
+         "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/chill_pop_hits.jpg",
          "desc": "LiSTNR - Chill Pop Hits",
          "longDesc": ""
       }
