@@ -1,0 +1,109 @@
+{
+    "station":
+    [
+      {
+         "name": "Nova 100 - Melbourne - 100.3 FM",
+         "website": "https://www.novafm.com.au/melbourne",
+         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.aac",
+         "imageURL": "https://i.ibb.co/b2WSdxp/Brand-Tile-N100.png",
+         "desc": "Nova 100 - Melbourne - 100.3 FM",
+         "longDesc": ""
+      },
+      {
+         "name": "Triple M Melbourne",
+         "website": "https://www.triplem.com.au/melbourne",
+         "streamURL": "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8?",
+         "imageURL": "https://triplem.listnr.com/wp-content/uploads/2024/04/cropped-mmm-favicon-180x180.png",
+         "desc": "Triple M Melbourne",
+         "longDesc": ""
+      },
+      {
+         "name": "GOLD 104.3 - Melbourne - 104.3 FM",
+         "website": "https://www.gold1043.com.au/",
+         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043AAC.aac",
+         "imageURL": "https://i.ibb.co/sdXLPr2L/6764ac42de73b9d6cbb53fec.webp",
+         "desc": "GOLD 104.3 - Melbourne - 104.3 FM",
+         "longDesc": ""
+      },
+      {
+         "name": "KIIS 1011 - Melbourne - 101.1 FM",
+         "website": "https://www.kiis1011.com.au/",
+         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/ARN_KIIS1011AAC.aac",
+         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/K1011.png?raw=true",
+         "desc": "KIIS 1011 - Melbourne - 101.1 FM",
+         "longDesc": ""
+      },
+      {
+         "name": "Smooth FM 91.5 - Melbourne - 91.5 FM",
+         "website": "https://smooth.com.au/station/smoothfm915",
+         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915_AAC128.aac",
+         "imageURL": "https://i.ibb.co/ZBZD4yz/89102254-2856298334439483-8500983319628873728-n.jpg",
+         "desc": "Smooth FM 91.5 - Melbourne - 91.5 FM",
+         "longDesc": ""
+      },		
+      {
+         "name": "ABC RN Victoria",
+         "website": "local://",
+         "streamURL": "https://streaming.abc-cdn.net.au/audio/hls/rnnsw.m3u8",
+         "imageURL": "https://static.wikia.nocookie.net/logopedia/images/9/94/ABCRadioNational_2020-icon.png",
+         "desc": "ABC RN Victoria",
+         "longDesc": ""
+      },
+      {
+         "name": "1116 SEN Melbourne",
+         "website": "http://www.sen.com.au/",
+         "streamURL": "http://13.54.221.214:8000/sen.mp3",
+         "imageURL": "http://www.sen.com.au/icon.png?82291b6720bc6ca8",
+         "desc": "1116 SEN Melbourne",
+         "longDesc": ""
+      },		
+      {
+         "name": "774 ABC Melbourne",
+         "website": "https://abc.net.au/radio/melbourne/",
+         "streamURL": "http://live-radio01.mediahubaustralia.com/3LRW/mp3/;",
+         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/ABC-774-Melbourne.png?raw=true",
+         "desc": "774 ABC Melbourne",
+         "longDesc": ""
+      },
+       {
+         "name": "3AW",
+         "website": "https://www.3aw.com.au",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.mp3",
+         "imageURL": "https://www.3aw.com.au/wp-content/themes/3aw/assets/img/favicon/apple-touch-icon.png",
+         "desc": "Melbournes own",
+	     "longDesc": "If Melbourne's talking about it, we're talking about it"
+      },
+      {
+         "name": "Triple M 80s",
+         "website": "https://www.triplem.com.au/80s",
+         "streamURL": "http://legacy.scahw.com.au/280s_32",
+         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/mmm-80s.jpg?raw=true",
+         "desc": "Triple M 80s",
+         "longDesc": ""
+      },
+      {
+         "name": "Triple M 90s",
+         "website": "https://www.triplem.com.au/90s",
+         "streamURL": "http://legacy.scahw.com.au/290s_32",
+         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/mmm-90s.jpg?raw=true",
+         "desc": "Triple M 90s",
+         "longDesc": ""
+      },
+      {
+         "name": "ROCK FM",
+         "website": "http://www.rockfm.ru/",
+         "streamURL": "http://nashe1.hostingradio.ru/rock-128.mp3",
+         "imageURL": "https://lh3.googleusercontent.com/D3taObR7tfyhwDFY40VS8DIVri7iif5RuzI9C-mXxRwF41vGZ_dO_n6MWM57P-mZczFC=w300",
+         "desc": "ROCK FM",
+         "longDesc": ""
+      },
+      {
+         "name": "LiSTNR - Chill Pop Hits",
+         "website": "https://play.listnr.com/station/chill-pop-hits",
+         "streamURL": "https://sa46.scastream.com.au/live/7chillpophits_128.stream/playlist.m3u8",
+         "imageURL": "https://github.com/markcs/Footy-Radio/blob/main/icons/chill_pop_hits.jpg?raw=true",
+         "desc": "LiSTNR - Chill Pop Hits",
+         "longDesc": ""
+      }
+    ]
+}
