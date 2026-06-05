@@ -180,6 +180,7 @@ class MainActivity : ComponentActivity() {
                                         trackTitle = state.trackTitle,
                                         artistName = state.artistName,
                                         artworkUrl = vm.resolvedArtwork,
+                                        liveScore = state.liveScore,
                                         isPlaying = state.isPlaying,
                                         isLive = state.isLive,
                                         onPlayPauseClick = { vm.togglePlayPause() }

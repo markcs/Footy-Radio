@@ -99,18 +99,22 @@ fun NowPlayingScreen(
     val normalizedArtist = artistName.trim()
     val hasTrackMetadata = normalizedTitle.isNotBlank() && !normalizedTitle.equals(stationName, ignoreCase = true)
     
+    val songMetadata = if (normalizedArtist.isNotBlank()) {
+        "$normalizedTitle — $normalizedArtist"
+    } else {
+        normalizedTitle
+    }
+
     val displayTitle = if (liveScore != null) {
         liveScore
     } else if (hasTrackMetadata) {
-        if (normalizedArtist.isNotBlank()) {
-            "$normalizedTitle — $normalizedArtist"
-        } else {
-            normalizedTitle
-        }
+        songMetadata
     } else {
         stationName
     }
+
     val displaySubtitle = when {
+        liveScore != null && hasTrackMetadata -> songMetadata
         hasTrackMetadata -> stationName
         else -> stationDesc
     }

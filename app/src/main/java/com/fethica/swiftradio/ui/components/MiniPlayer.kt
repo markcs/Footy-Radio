@@ -44,6 +44,7 @@ fun MiniPlayer(
     trackTitle: String,
     artistName: String,
     artworkUrl: String?,
+    liveScore: String? = null,
     isPlaying: Boolean,
     isLive: Boolean = true,
     onPlayPauseClick: () -> Unit,
@@ -52,16 +53,26 @@ fun MiniPlayer(
     val normalizedTitle = trackTitle.trim()
     val normalizedArtist = artistName.trim()
     val hasTrackMetadata = normalizedTitle.isNotBlank() && !normalizedTitle.equals(stationName, ignoreCase = true)
-    val displayTitle = if (hasTrackMetadata) {
-        if (normalizedArtist.isNotBlank()) {
-            "$normalizedTitle — $normalizedArtist"
-        } else {
-            normalizedTitle
-        }
+    
+    val songMetadata = if (normalizedArtist.isNotBlank()) {
+        "$normalizedTitle — $normalizedArtist"
+    } else {
+        normalizedTitle
+    }
+
+    val displayTitle = if (liveScore != null) {
+        liveScore
+    } else if (hasTrackMetadata) {
+        songMetadata
     } else {
         stationName
     }
-    val displaySubtitle = stationName
+
+    val displaySubtitle = if (liveScore != null && hasTrackMetadata) {
+        songMetadata
+    } else {
+        stationName
+    }
 
     Row(
         modifier = modifier
