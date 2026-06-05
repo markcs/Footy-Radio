@@ -53,7 +53,7 @@ fun MiniPlayer(
     val normalizedTitle = trackTitle.trim()
     val normalizedArtist = artistName.trim()
     val hasTrackMetadata = normalizedTitle.isNotBlank() && !normalizedTitle.equals(stationName, ignoreCase = true)
-    
+
     val songMetadata = if (normalizedArtist.isNotBlank()) {
         "$normalizedTitle — $normalizedArtist"
     } else {

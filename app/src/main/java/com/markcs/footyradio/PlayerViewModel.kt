@@ -198,6 +198,7 @@ class PlayerViewModel(
         resetTrackInfo()
         uiState = uiState.copy(currentStation = station)
         stationMediaItems = buildMediaItems(uiState.stations)
+        startSquigglePolling()
         withController { ctrl ->
             lastKnownMetadata = stationMediaItems[stationIndex].mediaMetadata
             ctrl.setMediaItems(stationMediaItems, stationIndex, 0)
@@ -330,22 +331,19 @@ class PlayerViewModel(
 
     fun setScreenActive(active: Boolean) {
         if (isPlayerScreenActive == active) return
-        isPlayerScreenActive = active
-        
-        squiggleService.setScreenActive(active)
-        if (active) {
-            if (squiggleJob?.isActive == true) return
-            squiggleJob = viewModelScope.launch {
-                squiggleService.liveScore.collect { score ->
-                    if (uiState.liveScore != score) {
-                        uiState = uiState.copy(liveScore = score)
-                    }
+        isPlayerScreenActive = active        
+    }
+
+
+    private fun startSquigglePolling() {
+        if (squiggleJob?.isActive == true) return
+        squiggleService.setScreenActive(true)
+        squiggleJob = viewModelScope.launch {
+            squiggleService.liveScore.collect { score ->
+                if (uiState.liveScore != score) {
+                    uiState = uiState.copy(liveScore = score)
                 }
             }
-        } else {
-            squiggleJob?.cancel()
-            squiggleJob = null
-            uiState = uiState.copy(liveScore = null)
         }
     }
 

@@ -453,16 +453,11 @@ class AudioService : MediaLibraryService() {
                 null
             }
 
-            // Priority: 1. Live Scores, 2. ICY Metadata, 3. Manifest Metadata
-            var displayTitle = liveScore 
-                ?: parsedIcyMeta.title?.toString() 
+            var displayTitle = parsedIcyMeta.title?.toString() 
                 ?: filteredManifestMeta?.title?.toString()
-                
-            var displayArtist = if (liveScore != null) {
-                "" // Hide artist when showing scores
-            } else {
-                parsedIcyMeta.artist?.toString() ?: filteredManifestMeta?.artist?.toString()
-            }
+
+            var displayArtist = parsedIcyMeta.artist?.toString() 
+                ?: filteredManifestMeta?.artist?.toString()
 
             // Fallback to base stream metadata if we have nothing yet
             if (displayTitle.isNullOrBlank()) {
