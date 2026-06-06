@@ -454,10 +454,11 @@ class AudioService : MediaLibraryService() {
                 null
             }
 
-            var displayTitle = parsedIcyMeta.title?.toString() 
+            // Priority: 1. ICY Metadata, 2. Manifest Metadata
+            var displayTitle = parsedIcyMeta.title?.toString()
                 ?: filteredManifestMeta?.title?.toString()
 
-            var displayArtist = parsedIcyMeta.artist?.toString() 
+            var displayArtist = parsedIcyMeta.artist?.toString()
                 ?: filteredManifestMeta?.artist?.toString()
 
             // Fallback to base stream metadata if we have nothing yet
@@ -469,11 +470,24 @@ class AudioService : MediaLibraryService() {
                 }
             }
 
-            // Final fallback: if it's junk or still null, use station name
+            // Final fallback: station name
             if (displayTitle.isNullOrBlank() || isJunkMetadata(displayTitle)) {
                 displayTitle = stationName
-                displayArtist = "" 
+                displayArtist = ""
             }
+
+            // Overlay live score as title if no song metadata, artist shows station name
+            if (liveScore != null) {
+                if (displayTitle == stationName) {
+                    // No song metadata — show live score as title, station name as artist
+                    displayTitle = liveScore
+                    displayArtist = stationName
+                } else {
+                    // Song metadata exists — keep it as title, show station name as artist
+                    displayArtist = stationName
+                }
+            }
+
             
             // Update global playlist metadata for the phone UI
             val playlistMeta = MediaMetadata.Builder()

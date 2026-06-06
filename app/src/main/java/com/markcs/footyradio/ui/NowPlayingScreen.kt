@@ -82,6 +82,7 @@ fun NowPlayingScreen(
     trackTitle: String,
     artistName: String,
     artworkUrl: String?,
+    stationArtworkUrl: String?,
     hTeam: String? = null,   // ADD
     aTeam: String? = null,   // ADD
     liveScore: String? = null,
@@ -130,10 +131,11 @@ fun NowPlayingScreen(
             label = "bgArtwork"
         ) { url ->
             TeamLogoImage(
-                artworkUrl = url,
+                artworkUrl = artworkUrl,
+                stationArtworkUrl = stationArtworkUrl,
                 hTeam = hTeam,
                 aTeam = aTeam,
-                liveScore = liveScore,
+                showLogos = liveScore != null,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -196,10 +198,11 @@ fun NowPlayingScreen(
                     label = "artwork"
                 ) { url ->
                     TeamLogoImage(
-                        artworkUrl = url,
+                        artworkUrl = artworkUrl,
+                        stationArtworkUrl = stationArtworkUrl,
                         hTeam = hTeam,
                         aTeam = aTeam,
-                        liveScore = liveScore,
+                        showLogos = liveScore != null,
                         contentDescription = stationName,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()

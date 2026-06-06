@@ -44,6 +44,7 @@ fun MiniPlayer(
     trackTitle: String,
     artistName: String,
     artworkUrl: String?,
+    stationArtworkUrl: String?, 
     hTeam: String?,   // ADD
     aTeam: String?,   // ADD
     liveScore: String? = null,
@@ -89,10 +90,11 @@ fun MiniPlayer(
             label = "miniArtwork"
         ) { url ->
             TeamLogoImage(
-                artworkUrl = url,
+                artworkUrl = artworkUrl,
+                stationArtworkUrl = stationArtworkUrl,
                 hTeam = hTeam,
                 aTeam = aTeam,
-                liveScore = liveScore,
+                showLogos = liveScore != null,
                 contentDescription = stationName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
