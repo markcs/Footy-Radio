@@ -129,6 +129,8 @@ class MainActivity : ComponentActivity() {
                                     artworkUrl = vm.resolvedArtwork,
                                     liveScore = state.liveScore,
                                     isPlaying = state.isPlaying,
+                                    hTeam = state.liveScoreHTeam,
+                                    aTeam = state.liveScoreATeam,
                                     isBuffering = state.isBuffering,
                                     isLive = state.isLive,
                                     currentPositionProvider = { vm.currentPositionMs },
@@ -183,6 +185,8 @@ class MainActivity : ComponentActivity() {
                                         liveScore = state.liveScore,
                                         isPlaying = state.isPlaying,
                                         isLive = state.isLive,
+                                        hTeam = state.liveScoreHTeam,
+                                        aTeam = state.liveScoreATeam,
                                         onPlayPauseClick = { vm.togglePlayPause() }
                                     )
                                 }

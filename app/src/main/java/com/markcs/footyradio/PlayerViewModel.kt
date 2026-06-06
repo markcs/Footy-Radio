@@ -42,6 +42,8 @@ data class PlayerUiState(
     val artistName: String = "",
     val artworkUrl: String? = null,
     val liveScore: String? = null,
+    val liveScoreHTeam: String? = null,
+    val liveScoreATeam: String? = null,
     val isLive: Boolean = true,
     val durationMs: Long = 0L,
     val isError: Boolean = false,
@@ -340,8 +342,12 @@ class PlayerViewModel(
         squiggleService.setScreenActive(true)
         squiggleJob = viewModelScope.launch {
             squiggleService.liveScore.collect { score ->
-                if (uiState.liveScore != score) {
-                    uiState = uiState.copy(liveScore = score)
+                if (uiState.liveScore != score?.scoreText) {
+                    uiState = uiState.copy(
+                        liveScore = score?.scoreText,
+                        liveScoreHTeam = score?.hTeam,
+                        liveScoreATeam = score?.aTeam
+                    )
                 }
             }
         }

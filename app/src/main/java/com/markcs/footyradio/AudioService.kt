@@ -34,6 +34,7 @@ import androidx.media3.session.MediaSession
 import com.markcs.footyradio.data.RadioStation
 import com.markcs.footyradio.data.StationsRepository
 import com.markcs.footyradio.data.SquiggleService
+import com.markcs.footyradio.data.LiveScoreState
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -67,7 +68,7 @@ class AudioService : MediaLibraryService() {
     private var bufferingRecoveryJob: Job? = null
     private var stallRecoveryJob: Job? = null
     
-    private var currentLiveScore: String? = null
+    private var currentLiveScore: LiveScoreState? = null
     private var currentIcyTitle: String? = null
     private var currentManifestMetadata: MediaMetadata? = null
     
@@ -434,7 +435,7 @@ class AudioService : MediaLibraryService() {
         val activePlayer = player ?: return
         serviceScope.launch(Dispatchers.Main) {
             val icyTitle = currentIcyTitle
-            val liveScore = currentLiveScore
+            val liveScore = currentLiveScore?.scoreText
             val manifestMeta = currentManifestMetadata
             
             val currentItem = activePlayer.currentMediaItem ?: return@launch
