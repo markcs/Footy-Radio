@@ -34,6 +34,7 @@ import androidx.media3.session.MediaSession
 import com.markcs.footyradio.data.RadioStation
 import com.markcs.footyradio.data.StationsRepository
 import com.markcs.footyradio.data.SquiggleService
+import com.markcs.footyradio.data.LiveScoreState
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -67,11 +68,14 @@ class AudioService : MediaLibraryService() {
     private var bufferingRecoveryJob: Job? = null
     private var stallRecoveryJob: Job? = null
     
-    private var currentLiveScore: String? = null
+    private var currentLiveScore: LiveScoreState? = null
     private var currentIcyTitle: String? = null
     private var currentManifestMetadata: MediaMetadata? = null
     
     private var squiggleJob: Job? = null
+    private var artworkFetchJob: Job? = null
+    private var lastArtworkLookupTerm: String? = null
+    private var currentSongArtworkUrl: String? = null
     
     private var retryCount = 0
     private var lastObservedPositionMs: Long = 0L
@@ -89,6 +93,7 @@ class AudioService : MediaLibraryService() {
 
     // Cache local asset artwork as byte arrays so Android Auto can display them
     private val artworkCache = mutableMapOf<String, ByteArray?>()
+    private val teamLogoCache = mutableMapOf<String, ByteArray?>() 
 
     companion object {
         private const val ROOT_ID = "/"
@@ -128,15 +133,20 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            // Ignore transitions caused purely by metadata updates (replaceMediaItem)
-            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
-
             Log.d(TAG, "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
             currentIcyTitle = null
             currentManifestMetadata = null
+            lastArtworkLookupTerm = null
+            currentSongArtworkUrl = null
+            artworkFetchJob?.cancel()
+            
+            val wrappedPlayer = player as? MetadataForwardingPlayer
+            wrappedPlayer?.setOverrideMetadata(null)
+            
             player?.setPlaylistMetadata(MediaMetadata.Builder().build())
+            updateDisplayMetadata()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -378,11 +388,9 @@ class AudioService : MediaLibraryService() {
             }
             override fun getSupportedTypes(): IntArray = defaultMediaSourceFactory.supportedTypes
             override fun createMediaSource(mediaItem: MediaItem): androidx.media3.exoplayer.source.MediaSource {
-                val type = androidx.media3.common.util.Util.inferContentType(
-                    mediaItem.localConfiguration?.uri ?: Uri.EMPTY,
-                    mediaItem.localConfiguration?.mimeType
-                )
-                return if (type == C.CONTENT_TYPE_HLS) {
+                val uri = mediaItem.localConfiguration?.uri ?: Uri.EMPTY
+                val type = androidx.media3.common.util.Util.inferContentType(uri)
+                return if (type == C.CONTENT_TYPE_HLS || mediaItem.localConfiguration?.mimeType == androidx.media3.common.MimeTypes.APPLICATION_M3U8) {
                     hlsMediaSourceFactory.createMediaSource(mediaItem)
                 } else {
                     defaultMediaSourceFactory.createMediaSource(mediaItem)
@@ -432,9 +440,10 @@ class AudioService : MediaLibraryService() {
 
     private fun updateDisplayMetadata() {
         val activePlayer = player ?: return
-        serviceScope.launch(Dispatchers.Main) {
+        serviceScope.launch {
             val icyTitle = currentIcyTitle
             val liveScore = currentLiveScore
+            val liveScoreText = currentLiveScore?.scoreText
             val manifestMeta = currentManifestMetadata
             
             val currentItem = activePlayer.currentMediaItem ?: return@launch
@@ -453,10 +462,11 @@ class AudioService : MediaLibraryService() {
                 null
             }
 
-            var displayTitle = parsedIcyMeta.title?.toString() 
+            // Priority: 1. ICY Metadata, 2. Manifest Metadata
+            var displayTitle = parsedIcyMeta.title?.toString()
                 ?: filteredManifestMeta?.title?.toString()
 
-            var displayArtist = parsedIcyMeta.artist?.toString() 
+            var displayArtist = parsedIcyMeta.artist?.toString()
                 ?: filteredManifestMeta?.artist?.toString()
 
             // Fallback to base stream metadata if we have nothing yet
@@ -468,17 +478,89 @@ class AudioService : MediaLibraryService() {
                 }
             }
 
-            // Final fallback: if it's junk or still null, use station name
+            // Final fallback: station name
             if (displayTitle.isNullOrBlank() || isJunkMetadata(displayTitle)) {
                 displayTitle = stationName
-                displayArtist = "" 
+                displayArtist = ""
             }
+
+            // Fetch artwork if it's a song and not just station name
+            val isSong = !displayTitle.isNullOrBlank() && displayTitle != stationName
+            if (isSong) {
+                val lookupTerm = if (displayArtist.isNullOrBlank()) displayTitle else "$displayArtist $displayTitle"
+                if (lookupTerm != lastArtworkLookupTerm) {
+                    lastArtworkLookupTerm = lookupTerm
+                    artworkFetchJob?.cancel()
+                    artworkFetchJob = serviceScope.launch {
+                        val app = application as SwiftRadioApplication
+                        val url = app.artworkService.fetchArtworkUrl(lookupTerm)
+                        if (url != currentSongArtworkUrl) {
+                            currentSongArtworkUrl = url
+                            updateDisplayMetadata()
+                        }
+                    }
+                }
+            } else {
+                if (lastArtworkLookupTerm != null || currentSongArtworkUrl != null) {
+                    lastArtworkLookupTerm = null
+                    currentSongArtworkUrl = null
+                    artworkFetchJob?.cancel()
+                    // Re-run to apply fallbacks immediately
+                    updateDisplayMetadata()
+                    return@launch
+                }
+            }
+
+            // Overlay live score: Title = Score, Artist = Song Info or Station Name
+            if (liveScore != null) {
+                val songInfo = if (!displayTitle.isNullOrBlank() && displayTitle != stationName) {
+                    if (displayArtist.isNullOrBlank()) displayTitle else "$displayArtist - $displayTitle"
+                } else {
+                    stationName
+                }
+                displayTitle = liveScoreText
+                displayArtist = songInfo
+            }
+
             
-            // Update global playlist metadata for the phone UI
-            val playlistMeta = MediaMetadata.Builder()
+            // Update global playlist metadata for external controllers and Android Auto
+            val metaBuilder = MediaMetadata.Builder()
                 .setTitle(displayTitle)
                 .setArtist(displayArtist)
-                .build()
+
+            // Determine artwork — song artwork takes priority
+            // If it's a song but we haven't fetched artwork yet, we can try manifest/icy
+            val songArtworkUrl = if (isSong) {
+                currentSongArtworkUrl 
+                    ?: filteredManifestMeta?.artworkUri?.toString()
+                    ?: parsedIcyMeta.artworkUri?.toString()
+            } else null
+
+            var artworkApplied = false
+            
+            // Priority 1: song artwork
+            if (!songArtworkUrl.isNullOrBlank()) {
+                artworkApplied = applyArtworkToMetadata(songArtworkUrl, metaBuilder)
+            }
+            
+            // Priority 2: team logos when live score active
+            if (!artworkApplied && currentLiveScore != null) {
+                val hTeam = currentLiveScore!!.hTeam
+                val aTeam = currentLiveScore!!.aTeam
+                if (hTeam.isNotBlank() && aTeam.isNotBlank()) {
+                    artworkApplied = applyTeamLogoArtwork(hTeam, aTeam, metaBuilder)
+                }
+            }
+            
+            // Priority 3: station artwork
+            if (!artworkApplied) {
+                val stationArtworkUrl = currentItem.mediaMetadata.artworkUri?.toString()
+                if (!stationArtworkUrl.isNullOrBlank()) {
+                    artworkApplied = applyArtworkToMetadata(stationArtworkUrl, metaBuilder)
+                }
+            }
+
+            val playlistMeta = metaBuilder.build()
 
             // Optimization: avoid redundant updates if metadata hasn't changed
             if (trackMetadataEquivalent(playlistMeta, activePlayer.playlistMetadata)) {
@@ -606,8 +688,8 @@ class AudioService : MediaLibraryService() {
      * Android Auto and some controllers cannot read "file:///android_asset/" or might fail with remote URIs.
      * To fix this, we load the artwork as a Bitmap byte array and embed it directly in the metadata.
      */
-    private suspend fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder) {
-        if (imageUrl.isBlank()) return
+    private suspend fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder): Boolean {
+        if (imageUrl.isBlank()) return false
 
         val bytes = artworkCache[imageUrl] ?: withContext(Dispatchers.IO) {
             if (imageUrl.startsWith("http")) {
@@ -642,12 +724,74 @@ class AudioService : MediaLibraryService() {
         if (bytes != null) {
             artworkCache[imageUrl] = bytes
             builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            // Always set URI as well for controllers that prefer it or as fallback
+            if (imageUrl.startsWith("http")) {
+                builder.setArtworkUri(Uri.parse(imageUrl))
+            }
+            return true
         }
-        
-        // Always set URI as well for controllers that prefer it or as fallback
-        if (imageUrl.startsWith("http")) {
-            builder.setArtworkUri(Uri.parse(imageUrl))
+        return false
+    }
+
+    private suspend fun applyTeamLogoArtwork(
+        hTeam: String,
+        aTeam: String,
+        builder: MediaMetadata.Builder
+    ): Boolean {
+        val cacheKey = "$hTeam|$aTeam"
+        val cached = teamLogoCache[cacheKey]
+        if (cached != null) {
+            builder.setArtworkData(cached, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            return true
         }
+
+        val baseUrl = "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/logos/team-logos"
+        val hUrl = "$baseUrl/${hTeam.replace(" ", "%20")}.png"
+        val aUrl = "$baseUrl/${aTeam.replace(" ", "%20")}.png"
+
+        val bytes = withContext(Dispatchers.IO) {
+            try {
+                val app = application as SwiftRadioApplication
+                val client = app.sharedOkHttpClient
+
+                fun fetchBitmap(url: String): Bitmap? {
+                    val request = okhttp3.Request.Builder().url(url).build()
+                    return client.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            BitmapFactory.decodeStream(response.body.byteStream())
+                        } else null
+                    }
+                }
+
+                val hBitmap = fetchBitmap(hUrl)
+                val aBitmap = fetchBitmap(aUrl)
+
+                if (hBitmap != null && aBitmap != null) {
+                    val size = 400 // each logo square size in pixels
+                    val composite = Bitmap.createBitmap(size * 2, size, Bitmap.Config.ARGB_8888)
+                    val canvas = android.graphics.Canvas(composite)
+                    canvas.drawBitmap(
+                        Bitmap.createScaledBitmap(hBitmap, size, size, true), 0f, 0f, null
+                    )
+                    canvas.drawBitmap(
+                        Bitmap.createScaledBitmap(aBitmap, size, size, true), size.toFloat(), 0f, null
+                    )
+                    val outputStream = ByteArrayOutputStream()
+                    composite.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                    outputStream.toByteArray()
+                } else null
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to build team logo composite: $hTeam vs $aTeam", e)
+                null
+            }
+        }
+
+        if (bytes != null) {
+            teamLogoCache[cacheKey] = bytes
+            builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            return true
+        }
+        return false
     }
 
     private fun extractIcyTitle(metadata: Metadata): String? {
@@ -687,7 +831,9 @@ class AudioService : MediaLibraryService() {
 
     private fun trackMetadataEquivalent(left: MediaMetadata, right: MediaMetadata): Boolean {
         return left.title?.toString().orEmpty() == right.title?.toString().orEmpty() &&
-            left.artist?.toString().orEmpty() == right.artist?.toString().orEmpty()
+            left.artist?.toString().orEmpty() == right.artist?.toString().orEmpty() &&
+            left.artworkUri?.toString().orEmpty() == right.artworkUri?.toString().orEmpty() &&
+            (left.artworkData?.contentEquals(right.artworkData ?: ByteArray(0)) ?: (right.artworkData == null))
     }
 
     private fun isEmptyTrackMetadata(metadata: MediaMetadata): Boolean {
@@ -865,20 +1011,30 @@ class AudioService : MediaLibraryService() {
             val baseMetadata = super.getMediaMetadata()
             val override = overrideMetadata ?: return baseMetadata
             
-            return baseMetadata.buildUpon()
-                .setTitle(override.title ?: baseMetadata.title)
-                .setArtist(override.artist ?: baseMetadata.artist)
-                .build()
+            val builder = baseMetadata.buildUpon()
+            
+            // Apply overrides if they are set in our custom metadata
+            override.title?.let { builder.setTitle(it) }
+            override.artist?.let { builder.setArtist(it) }
+            
+            // Special handling for artwork to ensure we don't leak base artwork 
+            // when we have an override (crucial for Android Auto)
+            if (override.artworkData != null) {
+                builder.setArtworkData(override.artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                builder.setArtworkUri(override.artworkUri) // Use the override URI (might be null)
+            } else if (override.artworkUri != null) {
+                builder.setArtworkUri(override.artworkUri)
+                builder.setArtworkData(null, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            }
+            
+            return builder.build()
         }
 
         override fun getCurrentMediaItem(): MediaItem? {
             val item = super.getCurrentMediaItem() ?: return null
             val override = overrideMetadata ?: return item
             
-            val newMetadata = item.mediaMetadata.buildUpon()
-                .setTitle(override.title ?: item.mediaMetadata.title)
-                .setArtist(override.artist ?: item.mediaMetadata.artist)
-                .build()
+            val newMetadata = getMediaMetadata()
                 
             return item.buildUpon()
                 .setMediaMetadata(newMetadata)
@@ -888,7 +1044,7 @@ class AudioService : MediaLibraryService() {
 
     private fun parseHlsManifestMetadata(manifest: HlsManifest): MediaMetadata? {
         val segment = manifest.mediaPlaylist.segments.firstOrNull() ?: return null
-        val titleAttr = segment.title ?: return null
+        val titleAttr = segment.title
         
         // Example titleAttr: title="Blaze Of Glory",artist="Jon Bon Jovi",url="..."
         if (titleAttr.contains("title=") && titleAttr.contains("artist=")) {

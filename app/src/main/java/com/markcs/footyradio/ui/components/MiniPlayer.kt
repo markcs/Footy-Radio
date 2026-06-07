@@ -44,6 +44,9 @@ fun MiniPlayer(
     trackTitle: String,
     artistName: String,
     artworkUrl: String?,
+    stationArtworkUrl: String?, 
+    hTeam: String?,   // ADD
+    aTeam: String?,   // ADD
     liveScore: String? = null,
     isPlaying: Boolean,
     isLive: Boolean = true,
@@ -86,11 +89,12 @@ fun MiniPlayer(
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "miniArtwork"
         ) { url ->
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(url)
-                    .crossfade(true)
-                    .build(),
+            TeamLogoImage(
+                artworkUrl = artworkUrl,
+                stationArtworkUrl = stationArtworkUrl,
+                hTeam = hTeam,
+                aTeam = aTeam,
+                showLogos = liveScore != null,
                 contentDescription = stationName,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

@@ -42,6 +42,8 @@ data class PlayerUiState(
     val artistName: String = "",
     val artworkUrl: String? = null,
     val liveScore: String? = null,
+    val liveScoreHTeam: String? = null,
+    val liveScoreATeam: String? = null,
     val isLive: Boolean = true,
     val durationMs: Long = 0L,
     val isError: Boolean = false,
@@ -340,8 +342,12 @@ class PlayerViewModel(
         squiggleService.setScreenActive(true)
         squiggleJob = viewModelScope.launch {
             squiggleService.liveScore.collect { score ->
-                if (uiState.liveScore != score) {
-                    uiState = uiState.copy(liveScore = score)
+                if (uiState.liveScore != score?.scoreText) {
+                    uiState = uiState.copy(
+                        liveScore = score?.scoreText,
+                        liveScoreHTeam = score?.hTeam,
+                        liveScoreATeam = score?.aTeam
+                    )
                 }
             }
         }
@@ -409,6 +415,14 @@ class PlayerViewModel(
             metadata.albumArtist?.toString().orEmpty().trim(),
             metadata.subtitle?.toString().orEmpty().trim()
         )
+
+        // If the title matches the live score, it's the score injected for external controllers (like Android Auto).
+        // On mobile, we already have the score in a separate UI field, so we use the artist field 
+        // (which contains the song info) instead to avoid redundancy.
+        if (uiState.liveScore != null && newTitle.isNotBlank() && newTitle == uiState.liveScore) {
+            newTitle = newArtist
+            newArtist = ""
+        }
 
         if (newArtist.isBlank()) {
             splitArtistTitle(newTitle)?.let { (artist, title) ->

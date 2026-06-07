@@ -126,9 +126,12 @@ class MainActivity : ComponentActivity() {
                                     stationWebsite = state.currentStation?.website ?: "",
                                     trackTitle = state.trackTitle,
                                     artistName = state.artistName,
-                                    artworkUrl = vm.resolvedArtwork,
+                                    artworkUrl = state.artworkUrl,
+                                    stationArtworkUrl = state.currentStation?.resolvedImageUrl,
                                     liveScore = state.liveScore,
                                     isPlaying = state.isPlaying,
+                                    hTeam = state.liveScoreHTeam,
+                                    aTeam = state.liveScoreATeam,
                                     isBuffering = state.isBuffering,
                                     isLive = state.isLive,
                                     currentPositionProvider = { vm.currentPositionMs },
@@ -179,10 +182,13 @@ class MainActivity : ComponentActivity() {
                                         stationName = state.currentStation?.name ?: "",
                                         trackTitle = state.trackTitle,
                                         artistName = state.artistName,
-                                        artworkUrl = vm.resolvedArtwork,
+                                        artworkUrl = state.artworkUrl,
+                                        stationArtworkUrl = state.currentStation?.resolvedImageUrl,
                                         liveScore = state.liveScore,
                                         isPlaying = state.isPlaying,
                                         isLive = state.isLive,
+                                        hTeam = state.liveScoreHTeam,
+                                        aTeam = state.liveScoreATeam,
                                         onPlayPauseClick = { vm.togglePlayPause() }
                                     )
                                 }

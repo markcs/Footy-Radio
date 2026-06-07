@@ -71,6 +71,7 @@ import com.markcs.footyradio.R
 import com.markcs.footyradio.ui.components.GradientBackground
 import com.markcs.footyradio.ui.components.StationInfoSheet
 import com.markcs.footyradio.ui.theme.SubtitleGray
+import com.markcs.footyradio.ui.components.TeamLogoImage
 
 @Composable
 fun NowPlayingScreen(
@@ -81,6 +82,9 @@ fun NowPlayingScreen(
     trackTitle: String,
     artistName: String,
     artworkUrl: String?,
+    stationArtworkUrl: String?,
+    hTeam: String? = null,   // ADD
+    aTeam: String? = null,   // ADD
     liveScore: String? = null,
     isPlaying: Boolean,
     isBuffering: Boolean = false,
@@ -126,11 +130,12 @@ fun NowPlayingScreen(
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "bgArtwork"
         ) { url ->
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(url)
-                    .crossfade(true)
-                    .build(),
+            TeamLogoImage(
+                artworkUrl = artworkUrl,
+                stationArtworkUrl = stationArtworkUrl,
+                hTeam = hTeam,
+                aTeam = aTeam,
+                showLogos = liveScore != null,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -192,11 +197,12 @@ fun NowPlayingScreen(
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "artwork"
                 ) { url ->
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(url)
-                            .crossfade(true)
-                            .build(),
+                    TeamLogoImage(
+                        artworkUrl = artworkUrl,
+                        stationArtworkUrl = stationArtworkUrl,
+                        hTeam = hTeam,
+                        aTeam = aTeam,
+                        showLogos = liveScore != null,
                         contentDescription = stationName,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()

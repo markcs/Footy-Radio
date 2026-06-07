@@ -115,6 +115,12 @@ data class SquiggleCompleteEvent(
     val complete: Int
 )
 
+data class LiveScoreState(
+    val scoreText: String,
+    val hTeam: String,
+    val aTeam: String
+)
+
 class SquiggleService(
     okHttpClient: OkHttpClient,
     scope: CoroutineScope
@@ -163,7 +169,7 @@ class SquiggleService(
     private val winnerReceivedTime = mutableMapOf<Int, Long>()
     private var initialFetchDone = false
 
-    val liveScore: StateFlow<String?> = callbackFlow {
+    val liveScore: StateFlow<LiveScoreState?> = callbackFlow {
         val localSdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         val dateSdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
@@ -340,7 +346,7 @@ class SquiggleService(
         }
     }
 
-    fun formatScores(games: List<SquiggleGame>, winnerTimes: Map<Int, Long>): String? {
+    fun formatScores(games: List<SquiggleGame>, winnerTimes: Map<Int, Long>): LiveScoreState? {
         val now = System.currentTimeMillis()
         val toShow = games.filter { g ->
             val complete = g.complete ?: 0
@@ -353,25 +359,27 @@ class SquiggleService(
 
         if (toShow.isEmpty()) return null
 
-        return toShow.sortedByDescending { it.complete ?: 0 }.joinToString(" | ") { game ->
+        val sorted = toShow.sortedByDescending { it.complete ?: 0 }
+        val scoreText = sorted.joinToString(" | ") { game ->
             val hTeam = game.hteam ?: "Unknown"
             val aTeam = game.ateam ?: "Unknown"
             val hScore = game.hscore ?: 0
             val aScore = game.ascore ?: 0
             val timeStr = game.timestr ?: ""
-
             val scoreStr = "$hTeam ($hScore) v $aTeam ($aScore)"
-            if (timeStr.isNotBlank()) {
-                "$scoreStr $timeStr"
-            } else {
-                scoreStr
-            }
+            if (timeStr.isNotBlank()) "$scoreStr $timeStr" else scoreStr
         }
+        // Use first game's teams for the logo (most active game)
+        return LiveScoreState(
+            scoreText = scoreText,
+            hTeam = sorted.first().hteam ?: "",
+            aTeam = sorted.first().ateam ?: ""
+        )
     }
 
     @Deprecated("Use fetchGames and handle logic in caller", ReplaceWith("fetchGames(year)"))
     suspend fun fetchLiveScore(year: Int): String? {
         val games = fetchGames(year) ?: return null
-        return formatScores(games, emptyMap())
+        return formatScores(games, emptyMap())?.scoreText
     }
 }
