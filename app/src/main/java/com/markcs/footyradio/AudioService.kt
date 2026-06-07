@@ -745,7 +745,7 @@ class AudioService : MediaLibraryService() {
             return true
         }
 
-        val baseUrl = "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/logos/team-logos"
+        val baseUrl = "https://markcs.github.io/Footy-Radio/team-logos"
         val hUrl = "$baseUrl/${hTeam.replace(" ", "%20")}.png"
         val aUrl = "$baseUrl/${aTeam.replace(" ", "%20")}.png"
 

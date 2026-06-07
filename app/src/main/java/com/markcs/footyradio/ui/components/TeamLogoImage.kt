@@ -17,8 +17,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 
 private const val TEAM_LOGO_BASE_URL =
-    "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/logos/team-logos"
-   //     "https://raw.githubusercontent.com/markcs/Footy-Radio/main/team-logos"
+    "https://markcs.github.io/Footy-Radio/team-logos"
 
 @Composable
 fun TeamLogoImage(
