@@ -511,20 +511,19 @@ class AudioService : MediaLibraryService() {
                 }
             }
 
-            // Overlay live score as title if no song metadata, artist shows station name
+            // Overlay live score: Title = Score, Artist = Song Info or Station Name
             if (liveScore != null) {
-                if (displayTitle == stationName) {
-                    // No song metadata — show live score as title, station name as artist
-                    displayTitle = liveScoreText
-                    displayArtist = stationName
+                val songInfo = if (!displayTitle.isNullOrBlank() && displayTitle != stationName) {
+                    if (displayArtist.isNullOrBlank()) displayTitle else "$displayArtist - $displayTitle"
                 } else {
-                    // Song metadata exists — keep it as title, show station name as artist
-                    displayArtist = stationName
+                    stationName
                 }
+                displayTitle = liveScoreText
+                displayArtist = songInfo
             }
 
             
-            // Update global playlist metadata for the phone UI
+            // Update global playlist metadata for external controllers and Android Auto
             val metaBuilder = MediaMetadata.Builder()
                 .setTitle(displayTitle)
                 .setArtist(displayArtist)
@@ -537,25 +536,27 @@ class AudioService : MediaLibraryService() {
                     ?: parsedIcyMeta.artworkUri?.toString()
             } else null
 
-            when {
-                // Priority 1: song artwork
-                !songArtworkUrl.isNullOrBlank() -> {
-                    applyArtworkToMetadata(songArtworkUrl, metaBuilder)
+            var artworkApplied = false
+            
+            // Priority 1: song artwork
+            if (!songArtworkUrl.isNullOrBlank()) {
+                artworkApplied = applyArtworkToMetadata(songArtworkUrl, metaBuilder)
+            }
+            
+            // Priority 2: team logos when live score active
+            if (!artworkApplied && currentLiveScore != null) {
+                val hTeam = currentLiveScore!!.hTeam
+                val aTeam = currentLiveScore!!.aTeam
+                if (hTeam.isNotBlank() && aTeam.isNotBlank()) {
+                    artworkApplied = applyTeamLogoArtwork(hTeam, aTeam, metaBuilder)
                 }
-                // Priority 2: team logos when live score active
-                currentLiveScore != null -> {
-                    val hTeam = currentLiveScore!!.hTeam
-                    val aTeam = currentLiveScore!!.aTeam
-                    if (hTeam.isNotBlank() && aTeam.isNotBlank()) {
-                        applyTeamLogoArtwork(hTeam, aTeam, metaBuilder)
-                    }
-                }
-                // Priority 3: station artwork
-                else -> {
-                    val stationArtworkUrl = currentItem.mediaMetadata.artworkUri?.toString()
-                    if (!stationArtworkUrl.isNullOrBlank()) {
-                        applyArtworkToMetadata(stationArtworkUrl, metaBuilder)
-                    }
+            }
+            
+            // Priority 3: station artwork
+            if (!artworkApplied) {
+                val stationArtworkUrl = currentItem.mediaMetadata.artworkUri?.toString()
+                if (!stationArtworkUrl.isNullOrBlank()) {
+                    artworkApplied = applyArtworkToMetadata(stationArtworkUrl, metaBuilder)
                 }
             }
 
@@ -687,8 +688,8 @@ class AudioService : MediaLibraryService() {
      * Android Auto and some controllers cannot read "file:///android_asset/" or might fail with remote URIs.
      * To fix this, we load the artwork as a Bitmap byte array and embed it directly in the metadata.
      */
-    private suspend fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder) {
-        if (imageUrl.isBlank()) return
+    private suspend fun applyArtworkToMetadata(imageUrl: String, builder: MediaMetadata.Builder): Boolean {
+        if (imageUrl.isBlank()) return false
 
         val bytes = artworkCache[imageUrl] ?: withContext(Dispatchers.IO) {
             if (imageUrl.startsWith("http")) {
@@ -723,24 +724,25 @@ class AudioService : MediaLibraryService() {
         if (bytes != null) {
             artworkCache[imageUrl] = bytes
             builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            // Always set URI as well for controllers that prefer it or as fallback
+            if (imageUrl.startsWith("http")) {
+                builder.setArtworkUri(Uri.parse(imageUrl))
+            }
+            return true
         }
-        
-        // Always set URI as well for controllers that prefer it or as fallback
-        if (imageUrl.startsWith("http")) {
-            builder.setArtworkUri(Uri.parse(imageUrl))
-        }
+        return false
     }
 
     private suspend fun applyTeamLogoArtwork(
         hTeam: String,
         aTeam: String,
         builder: MediaMetadata.Builder
-    ) {
+    ): Boolean {
         val cacheKey = "$hTeam|$aTeam"
         val cached = teamLogoCache[cacheKey]
         if (cached != null) {
             builder.setArtworkData(cached, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-            return
+            return true
         }
 
         val baseUrl = "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/logos/team-logos"
@@ -787,7 +789,9 @@ class AudioService : MediaLibraryService() {
         if (bytes != null) {
             teamLogoCache[cacheKey] = bytes
             builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            return true
         }
+        return false
     }
 
     private fun extractIcyTitle(metadata: Metadata): String? {
@@ -1007,24 +1011,30 @@ class AudioService : MediaLibraryService() {
             val baseMetadata = super.getMediaMetadata()
             val override = overrideMetadata ?: return baseMetadata
             
-            return baseMetadata.buildUpon()
-                .setTitle(override.title ?: baseMetadata.title)
-                .setArtist(override.artist ?: baseMetadata.artist)
-                .setArtworkUri(override.artworkUri ?: baseMetadata.artworkUri)
-                .setArtworkData(override.artworkData ?: baseMetadata.artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                .build()
+            val builder = baseMetadata.buildUpon()
+            
+            // Apply overrides if they are set in our custom metadata
+            override.title?.let { builder.setTitle(it) }
+            override.artist?.let { builder.setArtist(it) }
+            
+            // Special handling for artwork to ensure we don't leak base artwork 
+            // when we have an override (crucial for Android Auto)
+            if (override.artworkData != null) {
+                builder.setArtworkData(override.artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                builder.setArtworkUri(override.artworkUri) // Use the override URI (might be null)
+            } else if (override.artworkUri != null) {
+                builder.setArtworkUri(override.artworkUri)
+                builder.setArtworkData(null, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            }
+            
+            return builder.build()
         }
 
         override fun getCurrentMediaItem(): MediaItem? {
             val item = super.getCurrentMediaItem() ?: return null
             val override = overrideMetadata ?: return item
             
-            val newMetadata = item.mediaMetadata.buildUpon()
-                .setTitle(override.title ?: item.mediaMetadata.title)
-                .setArtist(override.artist ?: item.mediaMetadata.artist)
-                .setArtworkUri(override.artworkUri ?: item.mediaMetadata.artworkUri)
-                .setArtworkData(override.artworkData ?: item.mediaMetadata.artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                .build()
+            val newMetadata = getMediaMetadata()
                 
             return item.buildUpon()
                 .setMediaMetadata(newMetadata)

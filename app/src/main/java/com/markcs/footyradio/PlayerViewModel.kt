@@ -416,6 +416,14 @@ class PlayerViewModel(
             metadata.subtitle?.toString().orEmpty().trim()
         )
 
+        // If the title matches the live score, it's the score injected for external controllers (like Android Auto).
+        // On mobile, we already have the score in a separate UI field, so we use the artist field 
+        // (which contains the song info) instead to avoid redundancy.
+        if (uiState.liveScore != null && newTitle.isNotBlank() && newTitle == uiState.liveScore) {
+            newTitle = newArtist
+            newArtist = ""
+        }
+
         if (newArtist.isBlank()) {
             splitArtistTitle(newTitle)?.let { (artist, title) ->
                 newArtist = artist
