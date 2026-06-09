@@ -4,7 +4,7 @@
       {
          "name": "Nova 100 - Melbourne - 100.3 FM",
          "website": "https://www.novafm.com.au/melbourne",
-         "streamURL": "https://23163.live.streamtheworld.com/NOVA_100_AAC128/HLS/playlist.m3u8",
+         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.aac",
          "imageURL": "https://i.ibb.co/b2WSdxp/Brand-Tile-N100.png",
          "desc": "Nova 100 - Melbourne - 100.3 FM",
          "longDesc": ""
