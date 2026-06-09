@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,35 +34,48 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.PackageInfoCompat
 import coil3.compose.AsyncImage
 import com.markcs.footyradio.Config
+import com.markcs.footyradio.PlayerViewModel
 import com.markcs.footyradio.R
 import com.markcs.footyradio.ui.theme.SubtitleGray
 import java.util.Calendar
@@ -68,15 +83,20 @@ import java.util.Calendar
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
+    viewModel: PlayerViewModel,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    
     val appVersion = try {
         val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         "${pInfo.versionName} (${PackageInfoCompat.getLongVersionCode(pInfo)})"
     } catch (_: Exception) {
         "1.0"
     }
+
+    var stationsUrl by remember { mutableStateOf(viewModel.getStationsUrl()) }
 
     Scaffold(
         topBar = {
@@ -122,6 +142,58 @@ fun AboutScreen(
                 color = SubtitleGray,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
             )
+
+            // Stations Config
+            SectionHeader(stringResource(R.string.about_section_stations))
+            SectionCard {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = stationsUrl,
+                        onValueChange = { stationsUrl = it },
+                        label = { Text(stringResource(R.string.about_station_url)) },
+                        placeholder = { Text(stringResource(R.string.about_station_url_hint)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Done
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = SubtitleGray.copy(alpha = 0.5f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                viewModel.resetStationsUrl()
+                                stationsUrl = viewModel.getStationsUrl()
+                                keyboardController?.hide()
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(stringResource(R.string.about_station_url_reset))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                viewModel.updateStationsUrl(stationsUrl)
+                                keyboardController?.hide()
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.about_station_url_save))
+                        }
+                    }
+                }
+            }
 
             // Features
             SectionHeader(stringResource(R.string.about_section_features))
@@ -217,12 +289,6 @@ fun AboutScreen(
                     modifier = Modifier.size(60.dp)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = stringResource(R.string.about_authors),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SubtitleGray,
-                    textAlign = TextAlign.Center
-                )
                 Text(
                     text = stringResource(R.string.about_copyright, Calendar.getInstance().get(Calendar.YEAR)),
                     style = MaterialTheme.typography.bodySmall,

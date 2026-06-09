@@ -515,13 +515,26 @@ class PlayerViewModel(
         uiState = uiState.copy(trackTitle = "", artistName = "", artworkUrl = null)
     }
 
+    fun getStationsUrl(): String {
+        return stationsRepository.getStationsUrl()
+    }
+
+    fun updateStationsUrl(url: String) {
+        stationsRepository.setStationsUrl(url)
+        refreshStations()
+    }
+
+    fun resetStationsUrl() {
+        stationsRepository.resetStationsUrl()
+        refreshStations()
+    }
+
     fun refreshStations() {
         viewModelScope.launch {
             uiState = uiState.copy(isRefreshing = true)
             try {
-                val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
                 uiState = uiState.copy(
-                    stations = stationsRepository.loadStations(remoteUrl),
+                    stations = stationsRepository.loadStations(),
                     isError = false,
                     isRefreshing = false
                 )
@@ -536,9 +549,8 @@ class PlayerViewModel(
     private fun loadStations() {
         viewModelScope.launch {
             try {
-                val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
                 uiState = uiState.copy(
-                    stations = stationsRepository.loadStations(remoteUrl),
+                    stations = stationsRepository.loadStations(),
                     isError = false
                 )
                 stationMediaItems = buildMediaItems(uiState.stations)

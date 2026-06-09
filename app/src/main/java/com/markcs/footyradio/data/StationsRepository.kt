@@ -1,6 +1,7 @@
 package com.markcs.footyradio.data
 
 import android.content.Context
+import com.markcs.footyradio.Config
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -18,6 +19,7 @@ class StationsRepository(
     private val context: Context,
     okHttpClient: OkHttpClient
 ) {
+    private val prefs = context.getSharedPreferences("footy_radio_prefs", Context.MODE_PRIVATE)
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -30,30 +32,32 @@ class StationsRepository(
         }
     }
 
+    fun getStationsUrl(): String {
+        return prefs.getString("custom_stations_url", Config.stationsURL) ?: Config.stationsURL
+    }
+
+    fun setStationsUrl(url: String) {
+        prefs.edit().putString("custom_stations_url", url).apply()
+    }
+
+    fun resetStationsUrl() {
+        prefs.edit().remove("custom_stations_url").apply()
+    }
+
     suspend fun loadStations(remoteUrl: String? = null): List<RadioStation> = withContext(Dispatchers.IO) {
-        val stations = if (remoteUrl != null) {
-            try {
-                val fetched = loadFromNetwork(remoteUrl)
-                saveToCache(fetched)
-                fetched
-            } catch (e: Exception) {
-                val cached = loadFromCache()
-                if (cached.isNotEmpty()) {
-                    cached
-                } else {
-                    // Fallback to assets if remote and cache both fail
-                    try {
-                        loadFromAssets()
-                    } catch (assetEx: Exception) {
-                        throw e // rethrow the original network error if assets also fail
-                    }
-                }
+        val targetUrl = remoteUrl ?: getStationsUrl()
+        val stations = try {
+            val fetched = loadFromNetwork(targetUrl)
+            saveToCache(fetched)
+            fetched
+        } catch (e: Exception) {
+            val cached = loadFromCache()
+            if (cached.isNotEmpty()) {
+                cached
+            } else {
+                throw e
             }
-        } else {
-            loadFromAssets()
         }
-        
-        val extensions = listOf("png", "jpg", "jpeg")
         
         val uniqueStations = stations.mapIndexed { index, station ->
             val finalId = if (station.id.isBlank()) "station_$index" else station.id
@@ -61,12 +65,6 @@ class StationsRepository(
             station.copy(id = finalId).apply {
                 resolvedImageUrl = if (imageURL.startsWith("http")) {
                     imageURL
-                } else if (imageURL.isNotBlank()) {
-                    // We'll trust the extensions and let Coil handle the fallback or use a default
-                    val ext = if (imageURL == "station-absolutecountry" || 
-                        imageURL == "station-classicrock" || 
-                        imageURL == "station-therockfm") "jpg" else "png"
-                    "file:///android_asset/${imageURL}.$ext"
                 } else {
                     "file:///android_asset/stationImage.png"
                 }
@@ -74,13 +72,6 @@ class StationsRepository(
         }
         
         uniqueStations
-    }
-
-    private fun loadFromAssets(): List<RadioStation> {
-        val jsonString = context.assets.open("stations.json")
-            .bufferedReader()
-            .use { it.readText() }
-        return json.decodeFromString<StationsResponse>(jsonString).station
     }
 
     private suspend fun loadFromNetwork(url: String): List<RadioStation> {

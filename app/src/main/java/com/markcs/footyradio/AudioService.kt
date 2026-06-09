@@ -449,40 +449,55 @@ class AudioService : MediaLibraryService() {
             val currentItem = activePlayer.currentMediaItem ?: return@launch
             val stationName = getCurrentStationName()
             
-            // Filter out junk metadata early
-            val parsedIcyMeta = if (!icyTitle.isNullOrBlank() && !isJunkMetadata(icyTitle)) {
-                buildTrackMetadataFromIcy(icyTitle)
-            } else {
-                MediaMetadata.Builder().build()
-            }
-            
-            val filteredManifestMeta = if (manifestMeta != null && !isJunkMetadata(manifestMeta.title)) {
-                manifestMeta
-            } else {
-                null
-            }
+            Log.d(TAG, "Updating Metadata: ICY='$icyTitle', ManifestTitle='${manifestMeta?.title}'")
 
             // Priority: 1. ICY Metadata, 2. Manifest Metadata
-            var displayTitle = parsedIcyMeta.title?.toString()
-                ?: filteredManifestMeta?.title?.toString()
+            var displayTitle: String? = null
+            var displayArtist: String? = null
+            var isJunk = false
 
-            var displayArtist = parsedIcyMeta.artist?.toString()
-                ?: filteredManifestMeta?.artist?.toString()
-
-            // Fallback to base stream metadata if we have nothing yet
-            if (displayTitle.isNullOrBlank()) {
-                val baseMeta = basePlayer?.currentMediaItem?.mediaMetadata
-                if (baseMeta != null && !isJunkMetadata(baseMeta.title)) {
-                    displayTitle = baseMeta.title?.toString()
-                    displayArtist = baseMeta.artist?.toString()
+            if (!icyTitle.isNullOrBlank()) {
+                if (isJunkMetadata(icyTitle)) {
+                    Log.d(TAG, "Detected ICY Junk: $icyTitle")
+                    isJunk = true
+                } else {
+                    val parsed = buildTrackMetadataFromIcy(icyTitle)
+                    displayTitle = parsed.title?.toString()
+                    displayArtist = parsed.artist?.toString()
                 }
             }
 
-            // Final fallback: station name
-            if (displayTitle.isNullOrBlank() || isJunkMetadata(displayTitle)) {
+            if (!isJunk && displayTitle.isNullOrBlank() && manifestMeta != null) {
+                if (isJunkMetadata(manifestMeta.title)) {
+                    Log.d(TAG, "Detected Manifest Junk: ${manifestMeta.title}")
+                    isJunk = true
+                } else {
+                    displayTitle = manifestMeta.title?.toString()
+                    displayArtist = manifestMeta.artist?.toString()
+                }
+            }
+
+            // Fallback to base stream metadata if we have nothing yet and haven't hit junk
+            if (!isJunk && displayTitle.isNullOrBlank()) {
+                val baseMeta = basePlayer?.currentMediaItem?.mediaMetadata
+                if (baseMeta != null) {
+                    if (isJunkMetadata(baseMeta.title)) {
+                        Log.d(TAG, "Detected Base Junk: ${baseMeta.title}")
+                        isJunk = true
+                    } else {
+                        displayTitle = baseMeta.title?.toString()
+                        displayArtist = baseMeta.artist?.toString()
+                    }
+                }
+            }
+
+            // Final fallback: station name if junk or no metadata
+            if (isJunk || displayTitle.isNullOrBlank()) {
                 displayTitle = stationName
                 displayArtist = ""
             }
+
+            Log.d(TAG, "Final Metadata: Title='$displayTitle', Artist='$displayArtist', isJunk=$isJunk")
 
             // Fetch artwork if it's a song and not just station name
             val isSong = !displayTitle.isNullOrBlank() && displayTitle != stationName
@@ -529,11 +544,8 @@ class AudioService : MediaLibraryService() {
                 .setArtist(displayArtist)
 
             // Determine artwork — song artwork takes priority
-            // If it's a song but we haven't fetched artwork yet, we can try manifest/icy
             val songArtworkUrl = if (isSong) {
-                currentSongArtworkUrl 
-                    ?: filteredManifestMeta?.artworkUri?.toString()
-                    ?: parsedIcyMeta.artworkUri?.toString()
+                currentSongArtworkUrl
             } else null
 
             var artworkApplied = false
@@ -627,8 +639,7 @@ class AudioService : MediaLibraryService() {
 
         serviceScope.launch {
             try {
-                val remoteUrl = if (Config.useLocalStations) null else Config.stationsURL
-                stations = repository.loadStations(remoteUrl)
+                stations = repository.loadStations()
                 
                 val items = mutableListOf<MediaItem>()
                 for ((index, station) in stations.withIndex()) {

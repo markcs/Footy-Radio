@@ -59,8 +59,14 @@
     <string name="about_email_subject">From Footy Radio App</string>
     <string name="about_share_chooser">Share</string>
 
+    <!-- About Screen - Stations URL -->
+    <string name="about_section_stations">Stations Configuration</string>
+    <string name="about_station_url">Custom Stations JSON URL</string>
+    <string name="about_station_url_hint">Enter JSON URL</string>
+    <string name="about_station_url_save">Apply &amp; Reload</string>
+    <string name="about_station_url_reset">Reset</string>
+
     <!-- About Screen - Footer -->
-    <string name="about_authors">Fethi - @fethica</string>
     <string name="about_copyright">Copyright \u00A9 %1$d Footy Radio</string>
 
     <!-- Features -->

@@ -110,7 +110,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 if (showAbout) {
-                    AboutScreen(onBack = { showAbout = false })
+                    AboutScreen(
+                        viewModel = vm,
+                        onBack = { showAbout = false }
+                    )
                 } else {
                     BottomSheetScaffold(
                         scaffoldState = scaffoldState,

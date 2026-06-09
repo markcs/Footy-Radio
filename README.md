@@ -28,13 +28,13 @@ Open-source radio station app for Android built with Kotlin, Jetpack Compose, an
 ## Getting Started
 
 1. Open the project in [Android Studio](https://developer.android.com/studio)
-2. Edit `Config.kt` to set your stations URL, contact info, and feature flags
-3. Replace the stations in `app/src/main/assets/stations.json` with your own
+2. Edit `Config.kt` to set your remote stations URL (`stationsURL`), contact info, and feature flags
+3. Ensure your remote JSON follows the station format below
 4. Build and run
 
 ### Station Format
 
-Each station in `stations.json` supports the following fields:
+Each station in the remote JSON supports the following fields:
 
 ```json
 {
@@ -69,7 +69,6 @@ All app-wide settings live in `Config.kt`:
 ```kotlin
 object Config {
     val gradientColor: Color = Color.White       // diagonal gradient overlay color
-    const val useLocalStations = true             // false = fetch from stationsURL
     const val stationsURL = "https://..."         // remote stations JSON URL
     const val hideNextPreviousButtons = false      // hide skip controls on the player
     const val enableSearch = true                  // show/hide search bar on station list
