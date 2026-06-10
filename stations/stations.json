@@ -20,7 +20,7 @@
       {
          "name": "GOLD 104.3 - Melbourne - 104.3 FM",
          "website": "https://www.gold1043.com.au/",
-         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043AAC.aac",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043AAC.m3u8",
          "imageURL": "https://i.ibb.co/sdXLPr2L/6764ac42de73b9d6cbb53fec.webp",
          "desc": "GOLD 104.3 - Melbourne - 104.3 FM",
          "longDesc": ""
