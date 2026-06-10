@@ -76,7 +76,7 @@
       {
          "name": "Triple M 80s",
          "website": "https://www.triplem.com.au/80s",
-         "streamURL": "http://legacy.scahw.com.au/280s_32",
+         "streamURL": "https://sa46.scastream.com.au/live/280s_128.stream/playlist.m3u8",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/mmm-80s.jpg",
          "desc": "Triple M 80s",
          "longDesc": ""
@@ -84,7 +84,7 @@
       {
          "name": "Triple M 90s",
          "website": "https://www.triplem.com.au/90s",
-         "streamURL": "http://legacy.scahw.com.au/290s_32",
+         "streamURL": "https://sa46.scastream.com.au/live/290s_128.stream/playlist.m3u8",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/mmm-90s.jpg",
          "desc": "Triple M 90s",
          "longDesc": ""
