@@ -101,7 +101,7 @@
          "name": "Totally Radio - Greatest Hits",
          "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836",
          "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_GRTST_HITS_S01.mp3",
-         "imageURL": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836",
+         "imageURL": "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6965f4585024100db7206a50/76db336bd_image.png",
          "desc": "The greatest hits of all time.",
          "longDesc": ""
       },
