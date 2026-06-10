@@ -73,7 +73,7 @@
          "desc": "1116 SEN Melbourne",
          "longDesc": ""
       },		
-       {
+      {
          "name": "3AW",
          "website": "https://www.3aw.com.au",
          "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.mp3",
@@ -81,6 +81,46 @@
          "desc": "Melbournes own",
 	     "longDesc": "If Melbourne's talking about it, we're talking about it"
       },
+      {
+         "name": "Totally Radio - Hits",
+         "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed5",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_HITS_S01.mp3",
+         "imageURL": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7",
+         "desc": "Australia's biggest hits, right now",
+         "longDesc": ""
+      },
+      {
+         "name": "Totally Radio - Pop",
+         "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed6",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.mp3",
+         "imageURL": "https://images.unsplash.com/photo-1470225620780-dba8ba36b745",
+         "desc": "Australia's fresh, feel-good pop favourites",
+         "longDesc": ""
+      },
+      {
+         "name": "Totally Radio - Greatest Hits",
+         "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_GRTST_HITS_S01.mp3",
+         "imageURL": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836",
+         "desc": "The greatest hits of all time.",
+         "longDesc": ""
+      },
+      {
+         "name": "Totally Radio - Easy",
+         "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_EASY_S01.mp3",
+         "imageURL": "https://images.unsplash.com/photo-1743433375185-713f86174db1",
+         "desc": "Chill Out",
+         "longDesc": ""
+      },
+      {
+         "name": "Totally Radio - Rock",
+         "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37838",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_ROCK_S01.mp3",
+         "imageURL": "https://images.unsplash.com/photo-1459749411175-04bf5292ceea",
+         "desc": "Pure rock energy",
+         "longDesc": ""
+      },		
       {
          "name": "Triple M 80s",
          "website": "https://www.triplem.com.au/80s",
