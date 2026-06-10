@@ -44,7 +44,7 @@
       {
          "name": "ABC RN Victoria",
          "website": "local://",
-         "streamURL": "https://streaming.abc-cdn.net.au/audio/hls/rnnsw.m3u8",
+         "streamURL": "https://streaming.abc-cdn.net.au/audio/hls/rnvic.m3u8",
          "imageURL": "https://static.wikia.nocookie.net/logopedia/images/9/94/ABCRadioNational_2020-icon.png",
          "desc": "ABC RN Victoria",
          "longDesc": ""
