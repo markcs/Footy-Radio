@@ -40,7 +40,15 @@
          "imageURL": "https://i.ibb.co/ZBZD4yz/89102254-2856298334439483-8500983319628873728-n.jpg",
          "desc": "Smooth FM 91.5 - Melbourne - 91.5 FM",
          "longDesc": ""
-      },		
+      },
+      {
+         "name": "Fox FM - Melbourne",
+         "website": "https://hit.listnr.com/melbourne/",
+         "streamURL": "https://wz3web.scahw.com.au/live/3fox_128.stream/playlist.m3u8",
+         "imageURL": "https://static.wikia.nocookie.net/australianradio/images/9/91/FOX101.9_2020.png/revision/latest?cb=20250109135807",
+         "desc": "Fox FM - Melbourne",
+         "longDesc": ""
+      },
       {
          "name": "ABC RN Victoria",
          "website": "local://",
