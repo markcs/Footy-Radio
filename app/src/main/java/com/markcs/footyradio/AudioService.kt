@@ -28,6 +28,7 @@ import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.extractor.metadata.icy.IcyInfo
+import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -103,11 +104,27 @@ class AudioService : MediaLibraryService() {
     private val playerListener = object : Player.Listener {
         override fun onMetadata(metadata: Metadata) {
             serviceScope.launch(Dispatchers.Default) {
+                var updated = false
+                
+                // 1. Check for ICY
                 val icyTitle = extractIcyTitle(metadata)
                 if (icyTitle != null) {
                     currentIcyTitle = icyTitle
+                    updated = true
                 }
-                updateDisplayMetadata()
+                
+                // 2. Check for ID3 or HLS Timed Metadata
+                val timedMeta = parseTimedMetadata(metadata)
+                if (timedMeta != null) {
+                    // We store this as currentManifestMetadata for the unified priority logic
+                    // since it's "more fresh" than the actual manifest
+                    currentManifestMetadata = timedMeta
+                    updated = true
+                }
+                
+                if (updated) {
+                    updateDisplayMetadata()
+                }
             }
         }
 
@@ -445,8 +462,7 @@ class AudioService : MediaLibraryService() {
             val liveScore = currentLiveScore
             val liveScoreText = currentLiveScore?.scoreText
             val manifestMeta = currentManifestMetadata
-            
-            val currentItem = activePlayer.currentMediaItem ?: return@launch
+            val currentItem = basePlayer?.currentMediaItem ?: activePlayer.currentMediaItem ?: return@launch
             val stationName = getCurrentStationName()
             
             Log.d(TAG, "Updating Metadata: ICY='$icyTitle', ManifestTitle='${manifestMeta?.title}'")
@@ -468,8 +484,11 @@ class AudioService : MediaLibraryService() {
             }
 
             if (!isJunk && displayTitle.isNullOrBlank() && manifestMeta != null) {
-                if (isJunkMetadata(manifestMeta.title)) {
-                    Log.d(TAG, "Detected Manifest Junk: ${manifestMeta.title}")
+                // Check if the manifest metadata itself indicates an ad
+                val cueType = manifestMeta.extras?.getString("cue_type")?.lowercase()
+                
+                if (isJunkMetadata(manifestMeta.title) || cueType == "ad") {
+                    Log.d(TAG, "Detected Manifest Junk: ${manifestMeta.title} (cue=$cueType)")
                     isJunk = true
                 } else {
                     displayTitle = manifestMeta.title?.toString()
@@ -598,7 +617,8 @@ class AudioService : MediaLibraryService() {
     private fun isJunkMetadata(text: CharSequence?): Boolean {
         if (text == null) return false
         val s = text.toString().lowercase()
-        return s.contains("asset spot") || s.contains("asset link") || s.contains("asset stop")
+        return s.contains("asset spot") || s.contains("asset link") || s.contains("asset stop") || 
+               s.contains("asset start") || s.contains("linearad") || s.equals("ad")
     }
 
     private fun getCurrentStationName(): String? {
@@ -805,6 +825,39 @@ class AudioService : MediaLibraryService() {
         return false
     }
 
+    private fun parseTimedMetadata(metadata: Metadata): MediaMetadata? {
+        var title: String? = null
+        var artist: String? = null
+        val extras = android.os.Bundle()
+
+        for (i in 0 until metadata.length()) {
+            when (val entry = metadata[i]) {
+                is TextInformationFrame -> {
+                    when (entry.id) {
+                        "TIT2" -> title = entry.value
+                        "TPE1" -> artist = entry.value
+                        "TXXX" -> {
+                            // Triton and others use TXXX for custom fields
+                            when (entry.description?.lowercase()) {
+                                "cue_type" -> extras.putString("cue_type", entry.value)
+                                "title" -> title = if (title == null) entry.value else title
+                                "artist" -> artist = if (artist == null) entry.value else artist
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (title == null && artist == null && extras.isEmpty) return null
+
+        return MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .setExtras(extras)
+            .build()
+    }
+
     private fun extractIcyTitle(metadata: Metadata): String? {
         for (index in 0 until metadata.length()) {
             val entry = metadata[index]
@@ -864,7 +917,7 @@ class AudioService : MediaLibraryService() {
         cancelRetry()
         retryJob = serviceScope.launch {
             val activePlayer = player ?: return@launch
-            val currentItem = activePlayer.currentMediaItem ?: return@launch
+            val currentItem = basePlayer?.currentMediaItem ?: activePlayer.currentMediaItem ?: return@launch
 
             // Robust reset: Release player completely to clear hardware codec resources (Resource 6)
             try {
