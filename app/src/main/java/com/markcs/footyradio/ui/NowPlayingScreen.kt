@@ -129,9 +129,9 @@ fun NowPlayingScreen(
             targetState = artworkUrl,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "bgArtwork"
-        ) { url ->
+        ) { targetUrl ->
             TeamLogoImage(
-                artworkUrl = artworkUrl,
+                artworkUrl = targetUrl,
                 stationArtworkUrl = stationArtworkUrl,
                 hTeam = hTeam,
                 aTeam = aTeam,
@@ -196,9 +196,9 @@ fun NowPlayingScreen(
                     targetState = artworkUrl,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "artwork"
-                ) { url ->
+                ) { targetUrl ->
                     TeamLogoImage(
-                        artworkUrl = artworkUrl,
+                        artworkUrl = targetUrl,
                         stationArtworkUrl = stationArtworkUrl,
                         hTeam = hTeam,
                         aTeam = aTeam,

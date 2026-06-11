@@ -53,9 +53,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 @OptIn(UnstableApi::class)
@@ -900,10 +897,6 @@ class AudioService : MediaLibraryService() {
             (left.artworkData?.contentEquals(right.artworkData ?: ByteArray(0)) ?: (right.artworkData == null))
     }
 
-    private fun isEmptyTrackMetadata(metadata: MediaMetadata): Boolean {
-        return metadata.title.isNullOrBlank() && metadata.artist.isNullOrBlank()
-    }
-
     private fun retryCurrentItem(reason: String) {
         retryCount += 1
         // Increase delay to give the system more time to release resources
@@ -1032,13 +1025,6 @@ class AudioService : MediaLibraryService() {
     private fun cancelStallRecovery() {
         stallRecoveryJob?.cancel()
         stallRecoveryJob = null
-    }
-
-    private fun logAudioOutputState(tag: String) {
-        val activePlayer = player ?: return
-        val musicVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val musicMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        Log.d(TAG, "Svc audio $tag playerVolume=${activePlayer.volume} deviceMusicVolume=$musicVolume/$musicMax")
     }
 
     /**

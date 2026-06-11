@@ -197,13 +197,6 @@ fun AboutScreen(
 
             // Features
             SectionHeader(stringResource(R.string.about_section_features))
-            SectionCard {
-                AboutRow(
-                    icon = Icons.AutoMirrored.Filled.List,
-                    title = stringResource(R.string.about_section_features),
-                    onClick = null
-                )
-            }
             features.forEach { feature ->
                 FeatureRow(icon = feature.icon, title = stringResource(feature.titleRes), subtitle = stringResource(feature.subtitleRes))
             }

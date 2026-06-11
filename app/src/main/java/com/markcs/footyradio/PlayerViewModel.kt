@@ -28,9 +28,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 data class PlayerUiState(
@@ -72,9 +69,6 @@ class PlayerViewModel(
 
     var currentPositionMs by mutableLongStateOf(0L)
         private set
-
-    val resolvedArtwork: String?
-        get() = uiState.artworkUrl ?: uiState.currentStation?.resolvedImageUrl
 
     // Controller
     private val mainExecutor = ContextCompat.getMainExecutor(application)
@@ -328,14 +322,6 @@ class PlayerViewModel(
             }
         }
     }
-
-    private var isPlayerScreenActive = false
-
-    fun setScreenActive(active: Boolean) {
-        if (isPlayerScreenActive == active) return
-        isPlayerScreenActive = active        
-    }
-
 
     private fun startSquigglePolling() {
         if (squiggleJob?.isActive == true) return

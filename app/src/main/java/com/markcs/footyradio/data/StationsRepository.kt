@@ -63,10 +63,10 @@ class StationsRepository(
             val finalId = if (station.id.isBlank()) "station_$index" else station.id
             
             station.copy(id = finalId).apply {
-                resolvedImageUrl = if (imageURL.startsWith("http")) {
-                    imageURL
-                } else {
-                    "file:///android_asset/stationImage.png"
+                resolvedImageUrl = when {
+                    imageURL.startsWith("http") -> imageURL
+                    imageURL.isNotBlank() -> "file:///android_asset/$imageURL"
+                    else -> "file:///android_asset/stationImage.png"
                 }
             }
         }

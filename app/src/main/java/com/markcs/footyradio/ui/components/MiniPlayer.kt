@@ -88,9 +88,9 @@ fun MiniPlayer(
             targetState = artworkUrl,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "miniArtwork"
-        ) { url ->
+        ) { targetUrl ->
             TeamLogoImage(
-                artworkUrl = artworkUrl,
+                artworkUrl = targetUrl,
                 stationArtworkUrl = stationArtworkUrl,
                 hTeam = hTeam,
                 aTeam = aTeam,

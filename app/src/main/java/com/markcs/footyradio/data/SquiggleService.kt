@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -375,11 +374,5 @@ class SquiggleService(
             hTeam = sorted.first().hteam ?: "",
             aTeam = sorted.first().ateam ?: ""
         )
-    }
-
-    @Deprecated("Use fetchGames and handle logic in caller", ReplaceWith("fetchGames(year)"))
-    suspend fun fetchLiveScore(year: Int): String? {
-        val games = fetchGames(year) ?: return null
-        return formatScores(games, emptyMap())?.scoreText
     }
 }

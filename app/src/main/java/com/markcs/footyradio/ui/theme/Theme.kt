@@ -7,13 +7,15 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
+import androidx.compose.ui.graphics.Color
+
 private val DarkColorScheme = darkColorScheme(
-    primary = White,
-    onPrimary = Black,
+    primary = Color.White,
+    onPrimary = Color.Black,
     background = DarkBackground,
-    onBackground = White,
+    onBackground = Color.White,
     surface = DarkSurface,
-    onSurface = White,
+    onSurface = Color.White,
 )
 
 @Composable

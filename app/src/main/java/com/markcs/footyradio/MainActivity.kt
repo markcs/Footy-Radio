@@ -106,7 +106,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 LaunchedEffect(bottomSheetState.currentValue) {
-                    vm.setScreenActive(bottomSheetState.currentValue == SheetValue.Expanded)
+                    // When sheet is collapsed, we might want to do something
                 }
 
                 if (showAbout) {
