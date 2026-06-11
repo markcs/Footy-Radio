@@ -325,7 +325,6 @@ class PlayerViewModel(
 
     private fun startSquigglePolling() {
         if (squiggleJob?.isActive == true) return
-        squiggleService.setScreenActive(true)
         squiggleJob = viewModelScope.launch {
             squiggleService.liveScore.collect { score ->
                 if (uiState.liveScore != score?.scoreText) {
@@ -441,9 +440,8 @@ class PlayerViewModel(
         val streamArtworkIsStationArtwork =
             streamArtwork != null && stationArtwork != null && streamArtwork == stationArtwork
 
-        if (streamArtwork != null) {
-            uiState = uiState.copy(artworkUrl = streamArtwork)
-        }
+        // Always update artworkUrl with stream metadata (even if null) to clear previous song artwork
+        uiState = uiState.copy(artworkUrl = streamArtwork)
 
         if (streamArtworkIsStationArtwork) {
             uiState = uiState.copy(artworkUrl = null)
@@ -452,9 +450,8 @@ class PlayerViewModel(
         if (!hasTrackMetadata) {
             currentArtworkLookupTerm = ""
             artworkLookupJob?.cancel()
-            if (streamArtwork == null || streamArtworkIsStationArtwork) {
-                uiState = uiState.copy(artworkUrl = null)
-            }
+            // If no track metadata, we already set it to streamArtwork above, 
+            // but if it was station artwork we cleared it.
             return
         }
 
@@ -464,6 +461,7 @@ class PlayerViewModel(
         if (lookupTerm.isBlank()) {
             currentArtworkLookupTerm = ""
             artworkLookupJob?.cancel()
+            uiState = uiState.copy(artworkUrl = null) // Ensure cleared if no term
             return
         }
         if (lookupTerm == currentArtworkLookupTerm) return
@@ -472,12 +470,15 @@ class PlayerViewModel(
             streamArtwork != null &&
                 !streamArtworkIsStationArtwork &&
                 streamArtwork != previousArtwork
+
         if (streamArtworkLooksFresh) {
             currentArtworkLookupTerm = lookupTerm
             artworkLookupJob?.cancel()
             return
         }
 
+        // New lookup starting - clear previous artwork to avoid stale images during ads/transitions
+        uiState = uiState.copy(artworkUrl = null)
         currentArtworkLookupTerm = lookupTerm
         artworkLookupJob?.cancel()
         artworkLookupJob = viewModelScope.launch {
