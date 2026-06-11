@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
+import android.util.Log
 import java.io.File
 import kotlinx.serialization.encodeToString
 
@@ -65,8 +66,20 @@ class StationsRepository(
             station.copy(id = finalId).apply {
                 resolvedImageUrl = when {
                     imageURL.startsWith("http") -> imageURL
-                    imageURL.isNotBlank() -> "file:///android_asset/$imageURL"
-                    else -> "file:///android_asset/stationImage.png"
+                    imageURL.isNotBlank() -> {
+                        try {
+                            // Validate asset existence
+                            context.assets.open(imageURL).use { }
+                            "file:///android_asset/$imageURL"
+                        } catch (e: Exception) {
+                            Log.w("StationsRepository", "Asset '$imageURL' for station '${station.name}' not found; falling back to stationImage.png")
+                            "file:///android_asset/stationImage.png"
+                        }
+                    }
+                    else -> {
+                        Log.w("StationsRepository", "Station '${station.name}' has blank imageURL; falling back to stationImage.png")
+                        "file:///android_asset/stationImage.png"
+                    }
                 }
             }
         }
@@ -88,7 +101,7 @@ class StationsRepository(
             val jsonString = json.encodeToString(response)
             getCacheFile().writeText(jsonString)
         } catch (e: Exception) {
-            android.util.Log.e("StationsRepository", "Failed to cache stations", e)
+            Log.e("StationsRepository", "Failed to cache stations", e)
         }
     }
 
@@ -102,7 +115,7 @@ class StationsRepository(
                 emptyList()
             }
         } catch (e: Exception) {
-            android.util.Log.e("StationsRepository", "Failed to load cached stations", e)
+            Log.e("StationsRepository", "Failed to load cached stations", e)
             emptyList()
         }
     }
