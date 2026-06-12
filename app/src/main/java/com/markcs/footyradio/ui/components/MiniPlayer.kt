@@ -85,12 +85,12 @@ fun MiniPlayer(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedContent(
-            targetState = artworkUrl,
+            targetState = artworkUrl ?: if (liveScore != null) "logos:$hTeam|$aTeam" else "station",
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "miniArtwork"
-        ) { targetUrl ->
+        ) { _ ->
             TeamLogoImage(
-                artworkUrl = targetUrl,
+                artworkUrl = artworkUrl,
                 stationArtworkUrl = stationArtworkUrl,
                 hTeam = hTeam,
                 aTeam = aTeam,

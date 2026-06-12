@@ -753,9 +753,7 @@ class AudioService : MediaLibraryService() {
             artworkCache[imageUrl] = bytes
             builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
             // Always set URI as well for controllers that prefer it or as fallback
-            if (imageUrl.startsWith("http")) {
-                builder.setArtworkUri(Uri.parse(imageUrl))
-            }
+            builder.setArtworkUri(Uri.parse(imageUrl))
             return true
         }
         return false
@@ -770,6 +768,7 @@ class AudioService : MediaLibraryService() {
         val cached = teamLogoCache[cacheKey]
         if (cached != null) {
             builder.setArtworkData(cached, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            builder.setArtworkUri(Uri.parse("footyradio://teamlogo?h=${hTeam.replace(" ", "%20")}&a=${aTeam.replace(" ", "%20")}"))
             return true
         }
 
@@ -817,6 +816,7 @@ class AudioService : MediaLibraryService() {
         if (bytes != null) {
             teamLogoCache[cacheKey] = bytes
             builder.setArtworkData(bytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+            builder.setArtworkUri(Uri.parse("footyradio://teamlogo?h=${hTeam.replace(" ", "%20")}&a=${aTeam.replace(" ", "%20")}"))
             return true
         }
         return false

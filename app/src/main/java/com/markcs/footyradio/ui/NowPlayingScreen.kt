@@ -126,12 +126,12 @@ fun NowPlayingScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         // Blurred background artwork with animated transition
         AnimatedContent(
-            targetState = artworkUrl,
+            targetState = artworkUrl ?: if (liveScore != null) "logos:$hTeam|$aTeam" else "station",
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "bgArtwork"
-        ) { targetUrl ->
+        ) { _ ->
             TeamLogoImage(
-                artworkUrl = targetUrl,
+                artworkUrl = artworkUrl,
                 stationArtworkUrl = stationArtworkUrl,
                 hTeam = hTeam,
                 aTeam = aTeam,
@@ -193,12 +193,12 @@ fun NowPlayingScreen(
                 contentAlignment = Alignment.Center
             ) {
                 AnimatedContent(
-                    targetState = artworkUrl,
+                    targetState = artworkUrl ?: if (liveScore != null) "logos:$hTeam|$aTeam" else "station",
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "artwork"
-                ) { targetUrl ->
+                ) { _ ->
                     TeamLogoImage(
-                        artworkUrl = targetUrl,
+                        artworkUrl = artworkUrl,
                         stationArtworkUrl = stationArtworkUrl,
                         hTeam = hTeam,
                         aTeam = aTeam,

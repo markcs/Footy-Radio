@@ -142,6 +142,7 @@ class PlayerViewModel(
     init {
         observeRawState()
         loadStations()
+        startSquigglePolling()
     }
 
     // --- Public API ---
@@ -434,7 +435,8 @@ class PlayerViewModel(
 
         uiState = uiState.copy(trackTitle = newTitle, artistName = newArtist)
 
-        val streamArtwork = metadata.artworkUri?.toString()?.takeIf { it.isNotBlank() }
+        val streamArtwork = metadata.artworkUri?.toString()
+            ?.takeIf { it.isNotBlank() && !it.startsWith("footyradio://") }
         val previousArtwork = uiState.artworkUrl
         val stationArtwork = station?.resolvedImageUrl
         val streamArtworkIsStationArtwork =
@@ -466,12 +468,7 @@ class PlayerViewModel(
         }
         if (lookupTerm == currentArtworkLookupTerm) return
 
-        val streamArtworkLooksFresh =
-            streamArtwork != null &&
-                !streamArtworkIsStationArtwork &&
-                streamArtwork != previousArtwork
-
-        if (streamArtworkLooksFresh) {
+        if (streamArtwork != null && !streamArtworkIsStationArtwork) {
             currentArtworkLookupTerm = lookupTerm
             artworkLookupJob?.cancel()
             return
@@ -595,11 +592,17 @@ class PlayerViewModel(
         } else if (title.isNotBlank()) {
             builder.setArtist(null)
         }
+        if (playlistMetadata.artworkUri != null) {
+            builder.setArtworkUri(playlistMetadata.artworkUri)
+        }
+        if (playlistMetadata.artworkData != null) {
+            builder.setArtworkData(playlistMetadata.artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+        }
         return builder.build()
     }
 
-    private fun isEmptyTrackMetadata(metadata: MediaMetadata): Boolean {
-        return metadata.title.isNullOrBlank() && metadata.artist.isNullOrBlank()
+    private fun isEmptyTrackMetadata(mediaMetadata: MediaMetadata): Boolean {
+        return mediaMetadata.title.isNullOrBlank() && mediaMetadata.artist.isNullOrBlank() && mediaMetadata.artworkUri == null
     }
 
     private fun firstNonBlank(vararg values: String): String {

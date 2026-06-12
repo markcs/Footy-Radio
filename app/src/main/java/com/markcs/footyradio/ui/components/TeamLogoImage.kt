@@ -38,7 +38,19 @@ fun TeamLogoImage(
     }
 
     when {
-        // Priority 1: team logos when live scores active
+        // Priority 1: song artwork
+        artworkUrl != null -> {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(artworkUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                modifier = modifier
+            )
+        }
+        // Priority 2: team logos when live scores active
         showLogos && hUrl != null && aUrl != null -> {
             Row(
                 modifier = modifier,
@@ -64,18 +76,6 @@ fun TeamLogoImage(
                     modifier = Modifier.weight(1f).fillMaxSize()
                 )
             }
-        }
-        // Priority 2: song artwork
-        artworkUrl != null -> {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(artworkUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = contentDescription,
-                contentScale = contentScale,
-                modifier = modifier
-            )
         }
         // Priority 3: station artwork
         else -> {
