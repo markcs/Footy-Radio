@@ -2,7 +2,7 @@
     "station":
     [
       {
-         "name": "Nova 100 - Melbourne - 100.3 FM",
+         "name": "Nova 100",
          "website": "https://www.novafm.com.au/melbourne",
          "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.m3u8",
          "imageURL": "https://i.ibb.co/b2WSdxp/Brand-Tile-N100.png",
@@ -10,7 +10,7 @@
          "longDesc": ""
       },
       {
-         "name": "Triple M Melbourne",
+         "name": "Triple M",
          "website": "https://www.triplem.com.au/melbourne",
          "streamURL": "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8?",
          "imageURL": "https://triplem.listnr.com/wp-content/uploads/2024/04/cropped-mmm-favicon-180x180.png",
@@ -18,7 +18,7 @@
          "longDesc": ""
       },
       {
-         "name": "GOLD 104.3 - Melbourne - 104.3 FM",
+         "name": "GOLD 104.3",
          "website": "https://www.gold1043.com.au/",
          "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043AAC.m3u8",
          "imageURL": "https://i.ibb.co/sdXLPr2L/6764ac42de73b9d6cbb53fec.webp",
@@ -26,7 +26,7 @@
          "longDesc": ""
       },
       {
-         "name": "KIIS 1011 - Melbourne - 101.1 FM",
+         "name": "KIIS 1011",
          "website": "https://www.kiis1011.com.au/",
          "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/ARN_KIIS1011AAC.m3u8",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/K1011.png",
@@ -34,7 +34,7 @@
          "longDesc": ""
       },
       {
-         "name": "Smooth FM 91.5 - Melbourne - 91.5 FM",
+         "name": "Smooth FM",
          "website": "https://smooth.com.au/station/smoothfm915",
          "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915_AAC128.m3u8",
          "imageURL": "https://i.ibb.co/ZBZD4yz/89102254-2856298334439483-8500983319628873728-n.jpg",
@@ -42,7 +42,7 @@
          "longDesc": ""
       },
       {
-         "name": "Fox FM - Melbourne",
+         "name": "Fox FM",
          "website": "https://hit.listnr.com/melbourne/",
          "streamURL": "https://sa46.scastream.com.au/live/3fox_128.stream/playlist.m3u8",
          "imageURL": "https://static.wikia.nocookie.net/australianradio/images/9/91/FOX101.9_2020.png/revision/latest?cb=20250109135807",
@@ -58,7 +58,7 @@
          "longDesc": ""
       },
       {
-         "name": "774 ABC Melbourne",
+         "name": "774 ABC",
          "website": "https://abc.net.au/radio/melbourne/",
          "streamURL": "http://live-radio01.mediahubaustralia.com/3LRW/mp3/;",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/ABC-774-Melbourne.png",
@@ -66,7 +66,7 @@
          "longDesc": ""
       },		
       {
-         "name": "1116 SEN Melbourne",
+         "name": "1116 SEN",
          "website": "http://www.sen.com.au/",
          "streamURL": "http://13.54.221.214:8000/sen.mp3",
          "imageURL": "http://www.sen.com.au/icon.png?82291b6720bc6ca8",
@@ -146,7 +146,7 @@
          "longDesc": ""
       },
       {
-         "name": "LiSTNR - Chill Pop Hits",
+         "name": "Chill Pop Hits",
          "website": "https://play.listnr.com/station/chill-pop-hits",
          "streamURL": "https://sa46.scastream.com.au/live/7chillpophits_128.stream/playlist.m3u8",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/chill_pop_hits.jpg",
