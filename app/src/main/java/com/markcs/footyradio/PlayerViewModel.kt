@@ -435,7 +435,8 @@ class PlayerViewModel(
 
         uiState = uiState.copy(trackTitle = newTitle, artistName = newArtist)
 
-        val streamArtwork = metadata.artworkUri?.toString()?.takeIf { it.isNotBlank() }
+        val streamArtwork = metadata.artworkUri?.toString()
+            ?.takeIf { it.isNotBlank() && !it.startsWith("footyradio://") }
         val previousArtwork = uiState.artworkUrl
         val stationArtwork = station?.resolvedImageUrl
         val streamArtworkIsStationArtwork =
