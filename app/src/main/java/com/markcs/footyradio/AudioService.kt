@@ -74,6 +74,7 @@ class AudioService : MediaLibraryService() {
     private var artworkFetchJob: Job? = null
     private var lastArtworkLookupTerm: String? = null
     private var currentSongArtworkUrl: String? = null
+    private var lastAppliedArtworkKey: String? = null
     
     private var retryCount = 0
     private var lastObservedPositionMs: Long = 0L
@@ -154,6 +155,7 @@ class AudioService : MediaLibraryService() {
             currentManifestMetadata = null
             lastArtworkLookupTerm = null
             currentSongArtworkUrl = null
+            lastAppliedArtworkKey = null
             artworkFetchJob?.cancel()
             
             val wrappedPlayer = player as? MetadataForwardingPlayer
@@ -555,53 +557,73 @@ class AudioService : MediaLibraryService() {
 
             
             // Update global playlist metadata for external controllers and Android Auto
+            // Determine what artwork URI/key should be shown, without fetching yet
+            val songArtworkUrl = if (isSong) currentSongArtworkUrl else null
+            val artworkKey: String? = when {
+                !songArtworkUrl.isNullOrBlank() -> songArtworkUrl
+                currentLiveScore != null -> {
+                    val h = currentLiveScore!!.hTeam
+                    val a = currentLiveScore!!.aTeam
+                    if (h.isNotBlank() && a.isNotBlank()) "teamlogo:$h|$a" else null
+                }
+                else -> currentItem.mediaMetadata.artworkUri?.toString()
+            }
+
+            val existingMeta = activePlayer.playlistMetadata
+            val textChanged = existingMeta.title?.toString().orEmpty() != displayTitle.orEmpty() ||
+                existingMeta.artist?.toString().orEmpty() != displayArtist.orEmpty()
+            val artworkChanged = artworkKey != lastAppliedArtworkKey
+
+            // Skip entirely if nothing changed
+            if (!textChanged && !artworkChanged) return@launch
+
             val metaBuilder = MediaMetadata.Builder()
                 .setTitle(displayTitle)
                 .setArtist(displayArtist)
 
-            // Determine artwork — song artwork takes priority
-            val songArtworkUrl = if (isSong) {
-                currentSongArtworkUrl
-            } else null
+            if (artworkChanged) {
+                // Artwork has changed — resolve and apply it
+                var artworkApplied = false
 
-            var artworkApplied = false
-            
-            // Priority 1: song artwork
-            if (!songArtworkUrl.isNullOrBlank()) {
-                artworkApplied = applyArtworkToMetadata(songArtworkUrl, metaBuilder)
-            }
-            
-            // Priority 2: team logos when live score active
-            if (!artworkApplied && currentLiveScore != null) {
-                val hTeam = currentLiveScore!!.hTeam
-                val aTeam = currentLiveScore!!.aTeam
-                if (hTeam.isNotBlank() && aTeam.isNotBlank()) {
-                    artworkApplied = applyTeamLogoArtwork(hTeam, aTeam, metaBuilder)
+                // Priority 1: song artwork
+                if (!songArtworkUrl.isNullOrBlank()) {
+                    artworkApplied = applyArtworkToMetadata(songArtworkUrl, metaBuilder)
                 }
-            }
-            
-            // Priority 3: station artwork
-            if (!artworkApplied) {
-                val stationArtworkUrl = currentItem.mediaMetadata.artworkUri?.toString()
-                if (!stationArtworkUrl.isNullOrBlank()) {
-                    artworkApplied = applyArtworkToMetadata(stationArtworkUrl, metaBuilder)
+
+                // Priority 2: team logos when live score active
+                if (!artworkApplied && currentLiveScore != null) {
+                    val hTeam = currentLiveScore!!.hTeam
+                    val aTeam = currentLiveScore!!.aTeam
+                    if (hTeam.isNotBlank() && aTeam.isNotBlank()) {
+                        artworkApplied = applyTeamLogoArtwork(hTeam, aTeam, metaBuilder)
+                    }
+                }
+
+                // Priority 3: station artwork
+                if (!artworkApplied) {
+                    val stationArtworkUrl = currentItem.mediaMetadata.artworkUri?.toString()
+                    if (!stationArtworkUrl.isNullOrBlank()) {
+                        artworkApplied = applyArtworkToMetadata(stationArtworkUrl, metaBuilder)
+                    }
+                }
+
+                lastAppliedArtworkKey = artworkKey
+            } else {
+                // Artwork unchanged — reuse existing artwork data to avoid Android Auto flash
+                existingMeta.artworkData?.let {
+                    metaBuilder.setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                }
+                existingMeta.artworkUri?.let {
+                    metaBuilder.setArtworkUri(it)
                 }
             }
 
             val playlistMeta = metaBuilder.build()
-
-            // Optimization: avoid redundant updates if metadata hasn't changed
-            if (trackMetadataEquivalent(playlistMeta, activePlayer.playlistMetadata)) {
-                return@launch
-            }
-            
             activePlayer.setPlaylistMetadata(playlistMeta)
-            
+
             // Use the ForwardingPlayer to update metadata without playlist churn
             val wrappedPlayer = player as? MetadataForwardingPlayer
             if (wrappedPlayer != null) {
-                // Only override if we have something better than the base stream metadata
-                // or if we specifically want to hide junk metadata with the station name.
                 if (displayTitle != null || displayArtist != null) {
                     wrappedPlayer.setOverrideMetadata(playlistMeta)
                 } else {
@@ -888,13 +910,6 @@ class AudioService : MediaLibraryService() {
             }
         }
         return "" to value.trim()
-    }
-
-    private fun trackMetadataEquivalent(left: MediaMetadata, right: MediaMetadata): Boolean {
-        return left.title?.toString().orEmpty() == right.title?.toString().orEmpty() &&
-            left.artist?.toString().orEmpty() == right.artist?.toString().orEmpty() &&
-            left.artworkUri?.toString().orEmpty() == right.artworkUri?.toString().orEmpty() &&
-            (left.artworkData?.contentEquals(right.artworkData ?: ByteArray(0)) ?: (right.artworkData == null))
     }
 
     private fun retryCurrentItem(reason: String) {
