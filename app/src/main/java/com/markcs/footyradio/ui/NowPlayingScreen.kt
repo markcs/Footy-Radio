@@ -1,41 +1,15 @@
 package com.markcs.footyradio.ui
 
-import android.content.Intent
-import android.os.Build
-import android.provider.Settings
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.outlined.Speaker
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -49,13 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -64,14 +32,48 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.app.MediaRouteButton
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.google.android.gms.cast.framework.CastButtonFactory
 import com.markcs.footyradio.R
 import com.markcs.footyradio.ui.components.GradientBackground
 import com.markcs.footyradio.ui.components.StationInfoSheet
 import com.markcs.footyradio.ui.theme.SubtitleGray
 import com.markcs.footyradio.ui.components.TeamLogoImage
+
+// I need to add back the other imports I accidentally removed or might need
+import android.view.ContextThemeWrapper
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 
 @Composable
 fun NowPlayingScreen(
@@ -83,8 +85,8 @@ fun NowPlayingScreen(
     artistName: String,
     artworkUrl: String?,
     stationArtworkUrl: String?,
-    hTeam: String? = null,   // ADD
-    aTeam: String? = null,   // ADD
+    hTeam: String? = null,
+    aTeam: String? = null,
     liveScore: String? = null,
     isPlaying: Boolean,
     isBuffering: Boolean = false,
@@ -99,243 +101,99 @@ fun NowPlayingScreen(
 ) {
     val context = LocalContext.current
     var showInfoSheet by remember { mutableStateOf(false) }
-    val normalizedTitle = trackTitle.trim()
-    val normalizedArtist = artistName.trim()
-    val hasTrackMetadata = normalizedTitle.isNotBlank() && !normalizedTitle.equals(stationName, ignoreCase = true)
-    
-    val songMetadata = if (normalizedArtist.isNotBlank()) {
-        "$normalizedTitle — $normalizedArtist"
-    } else {
-        normalizedTitle
-    }
-
-    val displayTitle = if (liveScore != null) {
-        liveScore
-    } else if (hasTrackMetadata) {
-        songMetadata
-    } else {
-        stationName
-    }
-
-    val displaySubtitle = when {
-        liveScore != null && hasTrackMetadata -> songMetadata
-        hasTrackMetadata -> stationName
-        else -> stationDesc
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Blurred background artwork with animated transition
-        AnimatedContent(
-            targetState = artworkUrl ?: if (liveScore != null) "logos:$hTeam|$aTeam" else "station",
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "bgArtwork"
-        ) { _ ->
-            TeamLogoImage(
-                artworkUrl = artworkUrl,
-                stationArtworkUrl = stationArtworkUrl,
-                hTeam = hTeam,
-                aTeam = aTeam,
-                showLogos = liveScore != null,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(60.dp)
-            )
-        }
-
-        // Dark overlay
-        Box(
+        // Full screen background artwork (blurred)
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(artworkUrl ?: stationArtworkUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.75f))
+                .blur(40.dp),
+            contentScale = ContentScale.Crop
         )
 
-        // Gradient overlay
+        // Gradient overlay for readability
         GradientBackground()
 
-        // Content
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .windowInsetsPadding(WindowInsets.navigationBars),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Drag handle
-            Spacer(modifier = Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .size(width = 40.dp, height = 4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color.White.copy(alpha = 0.3f))
-            )
-
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Artwork with buffering overlay and play/pause scale animation
-            val artworkScale by animateFloatAsState(
-                targetValue = if (isPlaying) 1f else 0.85f,
-                animationSpec = spring(dampingRatio = 0.7f),
-                label = "artworkScale"
+            // Station Name
+            Text(
+                text = stationName,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.7f),
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Artwork / Team Logos
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .graphicsLayer {
-                        scaleX = artworkScale
-                        scaleY = artworkScale
-                    }
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {
-                AnimatedContent(
-                    targetState = artworkUrl ?: if (liveScore != null) "logos:$hTeam|$aTeam" else "station",
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "artwork"
-                ) { _ ->
-                    TeamLogoImage(
-                        artworkUrl = artworkUrl,
-                        stationArtworkUrl = stationArtworkUrl,
-                        hTeam = hTeam,
-                        aTeam = aTeam,
-                        showLogos = liveScore != null,
-                        contentDescription = stationName,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                // Buffering overlay
-                Crossfade(
-                    targetState = isBuffering,
-                    label = "bufferingOverlay"
-                ) { buffering ->
-                    if (buffering) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.4f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(48.dp)
-                            )
-                        }
-                    }
-                }
+                TeamLogoImage(
+                    artworkUrl = artworkUrl,
+                    stationArtworkUrl = stationArtworkUrl ?: R.drawable.ic_launcher_background.toString(),
+                    hTeam = hTeam,
+                    aTeam = aTeam,
+                    showLogos = hTeam != null && aTeam != null && liveScore != null,
+                    contentDescription = stationName,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            // Track info — fixed min heights to prevent layout jumps
-            Text(
-                text = displayTitle,
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 32.dp)
-                    .basicMarquee
-                    (
-                       iterations = Int.MAX_VALUE,
-                       velocity = 45.dp // Moved velocity inside the basicMarquee parameters
-                    )
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = displaySubtitle,
-                style = MaterialTheme.typography.bodyLarge,
-                color = SubtitleGray,
-                maxLines = 1,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 24.dp)
-                    .basicMarquee
-                    (
-                       iterations = Int.MAX_VALUE,
-                       velocity = 45.dp // Moved velocity inside the basicMarquee parameters
-                    )
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Scrubber / LIVE area — fixed height to prevent layout jumps
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(40.dp),
-                contentAlignment = Alignment.Center
+            // Metadata: Track Title and Artist
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (isLive) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        HorizontalDivider(
-                            color = Color.White.copy(alpha = 0.2f),
-                            thickness = 1.dp
-                        )
-                        Text(
-                            text = stringResource(R.string.player_live),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.7f),
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFF2A2A2A))
-                                .padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
-                } else if (durationMs > 0) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        val currentMs = currentPositionProvider()
-                        val fraction = if (durationMs > 0) {
-                            (currentMs.toFloat() / durationMs).coerceIn(0f, 1f)
-                        } else 0f
-                        ScrubBar(
-                            fraction = fraction,
-                            onSeek = { newFraction ->
-                                onSeek((newFraction * durationMs).toLong())
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = formatTime(currentMs),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SubtitleGray
-                            )
-                            Text(
-                                text = "-${formatTime(durationMs - currentMs)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SubtitleGray
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = trackTitle,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.basicMarquee()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = artistName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = SubtitleGray,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
-            // Center controls in remaining space
             Spacer(modifier = Modifier.weight(1f))
 
-            // Playback controls
+            // Playback Controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (!hideNextPrevious) {
@@ -349,35 +207,28 @@ fun NowPlayingScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.size(32.dp))
-
                 IconButton(
                     onClick = onPlayPauseClick,
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(80.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.15f))
+                        .background(Color.White)
                 ) {
-                    if (isPlaying && isLive) {
-                        Icon(
-                            imageVector = Icons.Filled.Stop,
-                            contentDescription = stringResource(R.string.cd_stop),
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
+                    if (isBuffering) {
+                        CircularProgressIndicator(
+                            color = Color.Black,
+                            modifier = Modifier.size(32.dp),
+                            strokeWidth = 3.dp
                         )
                     } else {
                         Icon(
-                            painter = painterResource(
-                                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-                            ),
-                            contentDescription = stringResource(if (isPlaying) R.string.cd_pause else R.string.cd_play),
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
+                            painter = if (isPlaying) painterResource(R.drawable.ic_pause) else painterResource(R.drawable.ic_play),
+                            contentDescription = if (isPlaying) stringResource(R.string.cd_pause) else stringResource(R.string.cd_play),
+                            tint = Color.Black,
+                            modifier = Modifier.size(40.dp)
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.size(32.dp))
 
                 if (!hideNextPrevious) {
                     IconButton(onClick = onNextClick, modifier = Modifier.size(48.dp)) {
@@ -391,7 +242,7 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(48.dp))
 
             // Bottom row — icons centered together
             Row(
@@ -399,27 +250,15 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val intent = Intent("com.android.settings.panel.action.MEDIA_OUTPUT").apply {
-                                putExtra("com.android.settings.panel.extra.PACKAGE_NAME", context.packageName)
-                            }
-                            context.startActivity(intent)
-                        } else {
-                            context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                AndroidView(
+                    factory = { ctx ->
+                        val themedContext = ContextThemeWrapper(ctx, R.style.Theme_MediaRoute)
+                        MediaRouteButton(themedContext).apply {
+                            CastButtonFactory.setUpMediaRouteButton(themedContext, this)
                         }
-                    } catch (_: Exception) {
-                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
-                    }
-                }) {
-                    Icon(
-                        imageVector = Icons.Outlined.Speaker,
-                        contentDescription = stringResource(R.string.cd_audio_output),
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                    },
+                    modifier = Modifier.size(32.dp)
+                )
 
                 Spacer(modifier = Modifier.width(24.dp))
 
@@ -442,80 +281,8 @@ fun NowPlayingScreen(
                 website = stationWebsite,
                 trackTitle = trackTitle,
                 artistName = artistName,
-                liveScore = liveScore,
                 onDismiss = { showInfoSheet = false }
             )
         }
     }
-}
-
-@Composable
-private fun ScrubBar(
-    fraction: Float,
-    onSeek: (Float) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val trackHeight = 4.dp
-    val thumbRadius = 6.dp
-    val totalHeight = thumbRadius * 2
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(totalHeight)
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    onSeek((offset.x / size.width).coerceIn(0f, 1f))
-                }
-            }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, _ ->
-                    change.consume()
-                    onSeek((change.position.x / size.width).coerceIn(0f, 1f))
-                }
-            },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        androidx.compose.foundation.Canvas(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            val trackY = size.height / 2
-            val trackHeightPx = trackHeight.toPx()
-            val cornerRadius = CornerRadius(trackHeightPx / 2)
-
-            // Inactive track
-            drawRoundRect(
-                color = Color.White.copy(alpha = 0.3f),
-                topLeft = androidx.compose.ui.geometry.Offset(0f, trackY - trackHeightPx / 2),
-                size = Size(size.width, trackHeightPx),
-                cornerRadius = cornerRadius
-            )
-
-            // Active track
-            val activeWidth = size.width * fraction
-            if (activeWidth > 0f) {
-                drawRoundRect(
-                    color = Color.White,
-                    topLeft = androidx.compose.ui.geometry.Offset(0f, trackY - trackHeightPx / 2),
-                    size = Size(activeWidth, trackHeightPx),
-                    cornerRadius = cornerRadius
-                )
-            }
-
-            // Thumb
-            val thumbX = activeWidth.coerceIn(thumbRadius.toPx(), size.width - thumbRadius.toPx())
-            drawCircle(
-                color = Color.White,
-                radius = thumbRadius.toPx(),
-                center = androidx.compose.ui.geometry.Offset(thumbX, trackY)
-            )
-        }
-    }
-}
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = (ms / 1000).coerceAtLeast(0)
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
 }

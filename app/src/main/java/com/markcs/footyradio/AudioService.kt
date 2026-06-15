@@ -36,6 +36,10 @@ import com.markcs.footyradio.data.RadioStation
 import com.markcs.footyradio.data.StationsRepository
 import com.markcs.footyradio.data.SquiggleService
 import com.markcs.footyradio.data.LiveScoreState
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
+import androidx.media3.cast.CastPlayer
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -61,6 +65,8 @@ class AudioService : MediaLibraryService() {
     private var mediaSession: MediaLibrarySession? = null
     private var player: Player? = null
     private var basePlayer: ExoPlayer? = null
+    private var castContext: CastContext? = null
+    private var castPlayer: CastPlayer? = null
     
     private var retryJob: Job? = null
     private var bufferingRecoveryJob: Job? = null
@@ -70,6 +76,24 @@ class AudioService : MediaLibraryService() {
     private var currentIcyTitle: String? = null
     private var currentManifestMetadata: MediaMetadata? = null
     
+    private val castSessionManagerListener = object : SessionManagerListener<CastSession> {
+        override fun onSessionStarting(session: CastSession) {}
+        override fun onSessionStarted(session: CastSession, sessionId: String) {
+            castPlayer?.let { setCurrentPlayer(it) }
+        }
+        override fun onSessionStartFailed(session: CastSession, error: Int) {}
+        override fun onSessionEnding(session: CastSession) {}
+        override fun onSessionEnded(session: CastSession, error: Int) {
+            basePlayer?.let { setCurrentPlayer(it) }
+        }
+        override fun onSessionResuming(session: CastSession, sessionId: String) {}
+        override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {
+            castPlayer?.let { setCurrentPlayer(it) }
+        }
+        override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+        override fun onSessionSuspended(session: CastSession, reason: Int) {}
+    }
+
     private var squiggleJob: Job? = null
     private var artworkFetchJob: Job? = null
     private var lastArtworkLookupTerm: String? = null
@@ -358,7 +382,51 @@ class AudioService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         initializePlayer()
+        setupCast()
         loadStationsForBrowse()
+    }
+
+    private fun setupCast() {
+        try {
+            castContext = CastContext.getSharedInstance(this)
+            val cp = CastPlayer(castContext!!)
+            cp.addListener(playerListener)
+            castPlayer = cp
+            castContext?.sessionManager?.addSessionManagerListener(castSessionManagerListener, CastSession::class.java)
+        } catch (e: Exception) {
+            Log.e(TAG, "Cast context not available", e)
+        }
+    }
+
+    private fun setCurrentPlayer(newPlayer: Player) {
+        val oldWrapped = player as? MetadataForwardingPlayer
+        val currentOverride = oldWrapped?.getOverrideMetadata()
+
+        val wasPlaying = player?.isPlaying ?: false
+        val currentItem = basePlayer?.currentMediaItem // Always sync from the source of truth
+        val currentPosition = player?.currentPosition ?: 0L
+
+        val newWrapped = MetadataForwardingPlayer(newPlayer)
+        newWrapped.setOverrideMetadata(currentOverride)
+        
+        player = newWrapped
+        mediaSession?.player = newWrapped
+
+        if (currentItem != null) {
+            newPlayer.setMediaItem(currentItem, currentPosition)
+            newPlayer.prepare()
+            if (wasPlaying) {
+                newPlayer.play()
+            }
+        }
+
+        if (newPlayer == basePlayer) {
+            castPlayer?.stop()
+        } else {
+            basePlayer?.pause()
+        }
+        
+        updateDisplayMetadata()
     }
 
     private fun initializePlayer() {
@@ -657,17 +725,22 @@ class AudioService : MediaLibraryService() {
 
     override fun onDestroy() {
         serviceScope.cancel()
+        castContext?.sessionManager?.removeSessionManagerListener(castSessionManagerListener, CastSession::class.java)
+        castPlayer?.removeListener(playerListener)
+        castPlayer?.release()
         mediaSession?.run {
             player.release()
             release()
         }
         player?.removeListener(playerListener)
+        basePlayer?.removeListener(playerListener)
         cancelRetry()
         cancelBufferingRecovery()
         cancelStallRecovery()
         stopSquigglePolling()
         player = null
         basePlayer = null
+        castPlayer = null
         mediaSession = null
         super.onDestroy()
     }
@@ -1061,6 +1134,8 @@ class AudioService : MediaLibraryService() {
                 it.onPlaylistMetadataChanged(currentMetadata)
             }
         }
+
+        fun getOverrideMetadata(): MediaMetadata? = overrideMetadata
 
         override fun addListener(listener: Player.Listener) {
             super.addListener(listener)

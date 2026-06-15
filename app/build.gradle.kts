@@ -55,6 +55,9 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)
+    implementation(libs.androidx.media3.cast)
+    implementation(libs.androidx.mediarouter)
+    implementation(libs.google.play.services.cast.framework)
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
