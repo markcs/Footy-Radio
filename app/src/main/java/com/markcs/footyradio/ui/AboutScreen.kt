@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Feedback
@@ -97,6 +98,10 @@ fun AboutScreen(
     }
 
     var stationsUrl by remember { mutableStateOf(viewModel.getStationsUrl()) }
+    val state = viewModel.uiState
+    var newStationName by remember { mutableStateOf("") }
+    var newStationUrl by remember { mutableStateOf("") }
+    var newStationImageUrl by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -191,6 +196,121 @@ fun AboutScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(stringResource(R.string.about_station_url_save))
                         }
+                    }
+                }
+            }
+
+            // Custom Stations
+            SectionHeader(stringResource(R.string.about_section_custom_stations))
+            SectionCard {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.about_add_station),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newStationName,
+                        onValueChange = { newStationName = it },
+                        label = { Text(stringResource(R.string.about_station_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = SubtitleGray.copy(alpha = 0.5f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newStationUrl,
+                        onValueChange = { newStationUrl = it },
+                        label = { Text(stringResource(R.string.about_station_stream_url)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Done
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = SubtitleGray.copy(alpha = 0.5f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newStationImageUrl,
+                        onValueChange = { newStationImageUrl = it },
+                        label = { Text(stringResource(R.string.about_station_image_url)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Done
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = SubtitleGray.copy(alpha = 0.5f)
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = {
+                                if (newStationName.isNotBlank() && newStationUrl.isNotBlank()) {
+                                    viewModel.addCustomStation(newStationName, newStationUrl, newStationImageUrl)
+                                    newStationName = ""
+                                    newStationUrl = ""
+                                    newStationImageUrl = ""
+                                    keyboardController?.hide()
+                                }
+                            },
+                            enabled = newStationName.isNotBlank() && newStationUrl.isNotBlank(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(stringResource(R.string.about_add))
+                        }
+                    }
+
+                    if (state.customStations.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        state.customStations.forEach { station ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(station.name, style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        station.streamURL,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = SubtitleGray,
+                                        maxLines = 1
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.deleteCustomStation(station.id) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = stringResource(R.string.cd_delete_station),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.about_no_custom_stations),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SubtitleGray,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }

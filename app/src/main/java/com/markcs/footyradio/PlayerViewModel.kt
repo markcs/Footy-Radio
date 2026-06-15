@@ -32,6 +32,7 @@ import java.util.Locale
 
 data class PlayerUiState(
     val stations: List<RadioStation> = emptyList(),
+    val customStations: List<RadioStation> = emptyList(),
     val currentStation: RadioStation? = null,
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
@@ -437,7 +438,6 @@ class PlayerViewModel(
 
         val streamArtwork = metadata.artworkUri?.toString()
             ?.takeIf { it.isNotBlank() && !it.startsWith("footyradio://") }
-        val previousArtwork = uiState.artworkUrl
         val stationArtwork = station?.resolvedImageUrl
         val streamArtworkIsStationArtwork =
             streamArtwork != null && stationArtwork != null && streamArtwork == stationArtwork
@@ -513,12 +513,34 @@ class PlayerViewModel(
         refreshStations()
     }
 
+    fun addCustomStation(name: String, url: String, imageUrl: String = "") {
+        val currentCustom = stationsRepository.loadCustomStations()
+        val newStation = RadioStation(
+            id = "custom_${System.currentTimeMillis()}",
+            name = name,
+            streamURL = url,
+            imageURL = imageUrl.ifBlank { "stationImage.png" },
+            desc = "User Added Station"
+        )
+        stationsRepository.saveCustomStations(currentCustom + newStation)
+        refreshStations()
+    }
+
+    fun deleteCustomStation(stationId: String) {
+        val currentCustom = stationsRepository.loadCustomStations()
+        val updated = currentCustom.filter { it.id != stationId }
+        stationsRepository.saveCustomStations(updated)
+        refreshStations()
+    }
+
     fun refreshStations() {
         viewModelScope.launch {
             uiState = uiState.copy(isRefreshing = true)
             try {
+                val loadedStations = stationsRepository.loadStations()
                 uiState = uiState.copy(
-                    stations = stationsRepository.loadStations(),
+                    stations = loadedStations,
+                    customStations = stationsRepository.loadCustomStations(),
                     isError = false,
                     isRefreshing = false
                 )
@@ -533,8 +555,10 @@ class PlayerViewModel(
     private fun loadStations() {
         viewModelScope.launch {
             try {
+                val loadedStations = stationsRepository.loadStations()
                 uiState = uiState.copy(
-                    stations = stationsRepository.loadStations(),
+                    stations = loadedStations,
+                    customStations = stationsRepository.loadCustomStations(),
                     isError = false
                 )
                 stationMediaItems = buildMediaItems(uiState.stations)

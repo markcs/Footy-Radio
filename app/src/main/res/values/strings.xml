@@ -66,6 +66,16 @@
     <string name="about_station_url_save">Apply &amp; Reload</string>
     <string name="about_station_url_reset">Reset</string>
 
+    <!-- About Screen - Custom Stations -->
+    <string name="about_section_custom_stations">My Custom Stations</string>
+    <string name="about_add_station">Add New Station</string>
+    <string name="about_station_name">Station Name</string>
+    <string name="about_station_stream_url">Stream URL</string>
+    <string name="about_station_image_url">Image URL</string>
+    <string name="about_add">Add</string>
+    <string name="about_no_custom_stations">No custom stations added yet.</string>
+    <string name="cd_delete_station">Delete Station</string>
+
     <!-- About Screen - Footer -->
     <string name="about_copyright">Copyright \u00A9 %1$d Footy Radio</string>
 

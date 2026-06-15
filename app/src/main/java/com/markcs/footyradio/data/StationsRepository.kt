@@ -45,9 +45,42 @@ class StationsRepository(
         prefs.edit().remove("custom_stations_url").apply()
     }
 
+    private fun getCacheFile(): File {
+        return File(context.filesDir, "cached_stations.json")
+    }
+
+    private fun getCustomStationsFile(): File {
+        return File(context.filesDir, "custom_stations.json")
+    }
+
+    fun loadCustomStations(): List<RadioStation> {
+        return try {
+            val file = getCustomStationsFile()
+            if (file.exists()) {
+                val jsonString = file.readText()
+                json.decodeFromString<StationsResponse>(jsonString).station
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e("StationsRepository", "Failed to load custom stations", e)
+            emptyList()
+        }
+    }
+
+    fun saveCustomStations(stations: List<RadioStation>) {
+        try {
+            val response = StationsResponse(stations)
+            val jsonString = json.encodeToString(response)
+            getCustomStationsFile().writeText(jsonString)
+        } catch (e: Exception) {
+            Log.e("StationsRepository", "Failed to save custom stations", e)
+        }
+    }
+
     suspend fun loadStations(remoteUrl: String? = null): List<RadioStation> = withContext(Dispatchers.IO) {
         val targetUrl = remoteUrl ?: getStationsUrl()
-        val stations = try {
+        val remoteStations = try {
             val fetched = loadFromNetwork(targetUrl)
             saveToCache(fetched)
             fetched
@@ -60,7 +93,10 @@ class StationsRepository(
             }
         }
         
-        val uniqueStations = stations.mapIndexed { index, station ->
+        val customStations = loadCustomStations()
+        val allStations = remoteStations + customStations
+        
+        val uniqueStations = allStations.mapIndexed { index, station ->
             val finalId = if (station.id.isBlank()) "station_$index" else station.id
             
             station.copy(id = finalId).apply {
@@ -89,10 +125,6 @@ class StationsRepository(
 
     private suspend fun loadFromNetwork(url: String): List<RadioStation> {
         return client.get(url).body<StationsResponse>().station
-    }
-
-    private fun getCacheFile(): File {
-        return File(context.filesDir, "cached_stations.json")
     }
 
     private fun saveToCache(stations: List<RadioStation>) {
