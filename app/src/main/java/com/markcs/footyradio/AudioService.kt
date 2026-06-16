@@ -125,6 +125,8 @@ class AudioService : MediaLibraryService() {
 
     private val playerListener = object : Player.Listener {
         override fun onMetadata(metadata: Metadata) {
+            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
+            Log.d(TAG, "Svc onMetadata isCast=$isCast count=${metadata.length()}")
             serviceScope.launch(Dispatchers.Default) {
                 var updated = false
                 
@@ -172,7 +174,8 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            Log.d(TAG, "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
+            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
+            Log.d(TAG, "Svc media item transition isCast=$isCast reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
             currentIcyTitle = null
@@ -190,11 +193,15 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            Log.e(TAG, "Svc player error: ${error.errorCodeName} ${error.message}", error)
-            retryCurrentItem("player_error")
+            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
+            Log.e(TAG, "Svc player error isCast=$isCast: ${error.errorCodeName} (${error.errorCode}) ${error.message}", error)
+            if (!isCast) {
+                retryCurrentItem("player_error")
+            }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
             val stateName = when (playbackState) {
                 Player.STATE_IDLE -> "IDLE"
                 Player.STATE_BUFFERING -> "BUFFERING"
@@ -202,22 +209,28 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_ENDED -> "ENDED"
                 else -> "UNKNOWN"
             }
-            Log.d(TAG, "Svc playback state=$stateName playWhenReady=${player?.playWhenReady} isPlaying=${player?.isPlaying}")
+            Log.d(TAG, "Svc playback state isCast=$isCast state=$stateName playWhenReady=${player?.playWhenReady} isPlaying=${player?.isPlaying}")
             
             when (playbackState) {
                 Player.STATE_READY -> {
-                    retryCount = 0
-                    cancelBufferingRecovery()
-                    startStallRecovery()
+                    if (!isCast) {
+                        retryCount = 0
+                        cancelBufferingRecovery()
+                        startStallRecovery()
+                    }
                 }
-                Player.STATE_BUFFERING -> scheduleBufferingRecovery()
+                Player.STATE_BUFFERING -> if (!isCast) scheduleBufferingRecovery()
                 Player.STATE_ENDED -> {
-                    cancelStallRecovery()
-                    retryCurrentItem("state_ended")
+                    if (!isCast) {
+                        cancelStallRecovery()
+                        retryCurrentItem("state_ended")
+                    }
                 }
                 Player.STATE_IDLE -> {
-                    cancelBufferingRecovery()
-                    cancelStallRecovery()
+                    if (!isCast) {
+                        cancelBufferingRecovery()
+                        cancelStallRecovery()
+                    }
                 }
             }
         }
@@ -377,6 +390,28 @@ class AudioService : MediaLibraryService() {
             }
             return future
         }
+
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val future = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            serviceScope.launch {
+                try {
+                    stationsLoaded.await()
+                    // Rebuild the full playlist for resumption
+                    val items = resolveAutoMediaItems(emptyList())
+                    // Attempt to find the last played item or default to index 0
+                    val lastId = basePlayer?.currentMediaItem?.mediaId
+                    val index = items.indexOfFirst { it.mediaId == lastId }.coerceAtLeast(0)
+                    
+                    future.set(MediaSession.MediaItemsWithStartPosition(items, index, 0L))
+                } catch (e: Exception) {
+                    future.setException(e)
+                }
+            }
+            return future
+        }
     }
 
     override fun onCreate() {
@@ -403,8 +438,13 @@ class AudioService : MediaLibraryService() {
         val currentOverride = oldWrapped?.getOverrideMetadata()
 
         val wasPlaying = player?.isPlaying ?: false
-        val currentItem = basePlayer?.currentMediaItem // Always sync from the source of truth
-        val currentPosition = player?.currentPosition ?: 0L
+        val sourceItem = basePlayer?.currentMediaItem // Always sync from the source of truth
+        
+        // For live streams, reset position to 0 (live edge) when switching to Cast 
+        // to avoid infinite buffering caused by seeking into a non-existent past.
+        val isLive = player?.isCurrentMediaItemLive ?: true
+        val isSwitchingToCast = newPlayer is CastPlayer
+        val currentPosition = if (isLive && isSwitchingToCast) 0L else (player?.currentPosition ?: 0L)
 
         val newWrapped = MetadataForwardingPlayer(newPlayer)
         newWrapped.setOverrideMetadata(currentOverride)
@@ -412,8 +452,29 @@ class AudioService : MediaLibraryService() {
         player = newWrapped
         mediaSession?.player = newWrapped
 
-        if (currentItem != null) {
-            newPlayer.setMediaItem(currentItem, currentPosition)
+        if (sourceItem != null) {
+            // Re-build MediaItem to include MIME type which is crucial for Chromecast
+            val uri = sourceItem.localConfiguration?.uri ?: Uri.EMPTY
+            
+            // Use Media3's built-in utilities to infer the content type and MIME type
+            // from the extension or URI structure, supporting HLS, MP3, AAC, M4A, etc.
+            val type = androidx.media3.common.util.Util.inferContentType(uri)
+            val mimeType = when (type) {
+                C.CONTENT_TYPE_HLS -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                C.CONTENT_TYPE_DASH -> androidx.media3.common.MimeTypes.APPLICATION_MPD
+                C.CONTENT_TYPE_SS -> androidx.media3.common.MimeTypes.APPLICATION_SS
+                else -> {
+                    // For progressive streams (MP3, AAC, M4A, etc.), infer from extension
+                    val extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(uri.toString())
+                    android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                }
+            }
+
+            val castItem = sourceItem.buildUpon()
+                .setMimeType(mimeType)
+                .build()
+
+            newPlayer.setMediaItem(castItem, currentPosition)
             newPlayer.prepare()
             if (wasPlaying) {
                 newPlayer.play()
@@ -423,7 +484,9 @@ class AudioService : MediaLibraryService() {
         if (newPlayer == basePlayer) {
             castPlayer?.stop()
         } else {
-            basePlayer?.pause()
+            // Stop local player entirely to free resources (decoders, network)
+            // and prevent it from running in the background during casting.
+            basePlayer?.stop()
         }
         
         updateDisplayMetadata()

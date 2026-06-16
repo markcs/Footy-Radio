@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.SwiftRadio" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.SwiftRadio" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:windowIsTranslucent">false</item>
+    </style>
 
     <style name="Theme.SwiftRadio.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#000000</item>
@@ -9,8 +12,12 @@
         <item name="postSplashScreenTheme">@style/Theme.SwiftRadio</item>
     </style>
 
-    <style name="Theme.MediaRoute" parent="@android:style/Theme.Material.Light">
+    <style name="Theme.MediaRoute" parent="Theme.AppCompat.Light">
         <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:colorBackground">#FFFFFF</item>
+        <item name="android:colorBackgroundFloating">#FFFFFF</item>
         <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="mediaRouteTheme">@style/Theme.MediaRouter.Light</item>
     </style>
 </resources>

@@ -11,12 +11,14 @@ composeBom = "2026.01.01"
 media3 = "1.9.2"
 castFramework = "22.0.0"
 mediarouter = "1.7.0"
+appcompat = "1.7.0"
 kotlinxSerializationJson = "1.10.0"
 ktor = "3.4.0"
 coil = "3.3.0"
 splashscreen = "1.0.1"
 
 [libraries]
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-mediarouter = { group = "androidx.mediarouter", name = "mediarouter", version.ref = "mediarouter" }
 google-play-services-cast-framework = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "castFramework" }
