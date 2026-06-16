@@ -4,7 +4,7 @@
       {
          "name": "Nova 100",
          "website": "https://www.novafm.com.au/melbourne",
-         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.m3u8",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.m3u8",
          "imageURL": "https://i.ibb.co/b2WSdxp/Brand-Tile-N100.png",
          "desc": "",
          "longDesc": ""
@@ -28,7 +28,7 @@
       {
          "name": "KIIS 1011",
          "website": "https://www.kiis1011.com.au/",
-         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/ARN_KIIS1011AAC.m3u8",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/ARN_KIIS1011AAC.m3u8",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/K1011.png",
          "desc": "",
          "longDesc": ""
@@ -36,7 +36,7 @@
       {
          "name": "Smooth FM",
          "website": "https://smooth.com.au/station/smoothfm915",
-         "streamURL": "http://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915_AAC128.m3u8",
+         "streamURL": "https://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915_AAC128.m3u8",
          "imageURL": "https://i.ibb.co/ZBZD4yz/89102254-2856298334439483-8500983319628873728-n.jpg",
          "desc": "",
          "longDesc": ""
@@ -60,7 +60,7 @@
       {
          "name": "774 ABC",
          "website": "https://abc.net.au/radio/melbourne/",
-         "streamURL": "http://live-radio01.mediahubaustralia.com/3LRW/mp3/;",
+         "streamURL": "https://live-radio01.mediahubaustralia.com/3LRW/mp3/;",
          "imageURL": "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/main/stations/icons/ABC-774-Melbourne.png",
          "desc": "",
          "longDesc": ""
