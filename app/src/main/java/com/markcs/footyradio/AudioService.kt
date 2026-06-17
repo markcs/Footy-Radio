@@ -39,6 +39,7 @@ import com.markcs.footyradio.data.LiveScoreState
 import com.google.android.gms.cast.framework.CastContext
 import com.google.android.gms.cast.framework.CastSession
 import com.google.android.gms.cast.framework.SessionManagerListener
+import com.google.android.gms.cast.framework.media.RemoteMediaClient
 import androidx.media3.cast.CastPlayer
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
@@ -67,6 +68,13 @@ class AudioService : MediaLibraryService() {
     private var basePlayer: ExoPlayer? = null
     private var castContext: CastContext? = null
     private var castPlayer: CastPlayer? = null
+
+
+
+    /** True when the active player (inside MetadataForwardingPlayer) is a CastPlayer. */
+    private val isCasting: Boolean
+        get() = (player as? MetadataForwardingPlayer)?.basePlayer is CastPlayer
+
     
     private var retryJob: Job? = null
     private var bufferingRecoveryJob: Job? = null
@@ -84,6 +92,11 @@ class AudioService : MediaLibraryService() {
         override fun onSessionStartFailed(session: CastSession, error: Int) {}
         override fun onSessionEnding(session: CastSession) {}
         override fun onSessionEnded(session: CastSession, error: Int) {
+            // basePlayer may have been nulled by a retry during the cast session.
+            // Reinitialise it before handing back to local playback.
+            if (basePlayer == null) {
+                initializePlayer()
+            }
             basePlayer?.let { setCurrentPlayer(it) }
         }
         override fun onSessionResuming(session: CastSession, sessionId: String) {}
@@ -114,9 +127,14 @@ class AudioService : MediaLibraryService() {
     private var browseMediaItems: List<MediaItem> = emptyList()
     private val stationsLoaded = CompletableDeferred<Unit>()
 
-    // Cache local asset artwork as byte arrays so Android Auto can display them
-    private val artworkCache = mutableMapOf<String, ByteArray?>()
-    private val teamLogoCache = mutableMapOf<String, ByteArray?>() 
+    // Cache local asset artwork as byte arrays so Android Auto can display them.
+    // Capped at 30 entries (LRU) to avoid accumulating bitmaps in memory indefinitely.
+    private val artworkCache = object : LinkedHashMap<String, ByteArray?>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, ByteArray?>) = size > 30
+    }
+    private val teamLogoCache = object : LinkedHashMap<String, ByteArray?>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, ByteArray?>) = size > 20
+    }
 
     companion object {
         private const val ROOT_ID = "/"
@@ -125,8 +143,7 @@ class AudioService : MediaLibraryService() {
 
     private val playerListener = object : Player.Listener {
         override fun onMetadata(metadata: Metadata) {
-            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
-            Log.d(TAG, "Svc onMetadata isCast=$isCast count=${metadata.length()}")
+            Log.d(TAG, "Svc onMetadata isCasting=$isCasting count=${metadata.length()}")
             serviceScope.launch(Dispatchers.Default) {
                 var updated = false
                 
@@ -174,8 +191,7 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
-            Log.d(TAG, "Svc media item transition isCast=$isCast reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
+            Log.d(TAG, "Svc media item transition isCasting=$isCasting reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
             currentIcyTitle = null
@@ -193,15 +209,13 @@ class AudioService : MediaLibraryService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
-            Log.e(TAG, "Svc player error isCast=$isCast: ${error.errorCodeName} (${error.errorCode}) ${error.message}", error)
-            if (!isCast) {
+            Log.e(TAG, "Svc player error isCasting=$isCasting: ${error.errorCodeName} (${error.errorCode}) ${error.message}", error)
+            if (!isCasting) {
                 retryCurrentItem("player_error")
             }
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            val isCast = player?.run { this is MetadataForwardingPlayer && basePlayer is CastPlayer } ?: false
             val stateName = when (playbackState) {
                 Player.STATE_IDLE -> "IDLE"
                 Player.STATE_BUFFERING -> "BUFFERING"
@@ -209,25 +223,25 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_ENDED -> "ENDED"
                 else -> "UNKNOWN"
             }
-            Log.d(TAG, "Svc playback state isCast=$isCast state=$stateName playWhenReady=${player?.playWhenReady} isPlaying=${player?.isPlaying}")
+            Log.d(TAG, "Svc playback state isCasting=$isCasting state=$stateName playWhenReady=${player?.playWhenReady} isPlaying=${player?.isPlaying}")
             
             when (playbackState) {
                 Player.STATE_READY -> {
-                    if (!isCast) {
+                    if (!isCasting) {
                         retryCount = 0
                         cancelBufferingRecovery()
                         startStallRecovery()
                     }
                 }
-                Player.STATE_BUFFERING -> if (!isCast) scheduleBufferingRecovery()
+                Player.STATE_BUFFERING -> if (!isCasting) scheduleBufferingRecovery()
                 Player.STATE_ENDED -> {
-                    if (!isCast) {
+                    if (!isCasting) {
                         cancelStallRecovery()
                         retryCurrentItem("state_ended")
                     }
                 }
                 Player.STATE_IDLE -> {
-                    if (!isCast) {
+                    if (!isCasting) {
                         cancelBufferingRecovery()
                         cancelStallRecovery()
                     }
@@ -424,7 +438,7 @@ class AudioService : MediaLibraryService() {
     private fun setupCast() {
         try {
             castContext = CastContext.getSharedInstance(this)
-            val cp = CastPlayer(castContext!!)
+            val cp = CastPlayer(castContext!!, RadioMediaItemConverter())
             cp.addListener(playerListener)
             castPlayer = cp
             castContext?.sessionManager?.addSessionManagerListener(castSessionManagerListener, CastSession::class.java)
@@ -437,10 +451,12 @@ class AudioService : MediaLibraryService() {
         val oldWrapped = player as? MetadataForwardingPlayer
         val currentOverride = oldWrapped?.getOverrideMetadata()
 
-        val wasPlaying = player?.isPlaying ?: false
+        // Use playWhenReady rather than isPlaying — isPlaying is false while buffering,
+        // so casting from a buffering state would silently never call play() on the CastPlayer.
+        val wasPlaying = player?.playWhenReady ?: false
         val sourceItem = basePlayer?.currentMediaItem // Always sync from the source of truth
-        
-        // For live streams, reset position to 0 (live edge) when switching to Cast 
+
+        // For live streams, reset position to 0 (live edge) when switching to Cast
         // to avoid infinite buffering caused by seeking into a non-existent past.
         val isLive = player?.isCurrentMediaItemLive ?: true
         val isSwitchingToCast = newPlayer is CastPlayer
@@ -448,49 +464,152 @@ class AudioService : MediaLibraryService() {
 
         val newWrapped = MetadataForwardingPlayer(newPlayer)
         newWrapped.setOverrideMetadata(currentOverride)
-        
+
+        // Ensure the newly-active player has our listener attached.
+        // (It may have been removed when it was last suspended.)
+        newPlayer.addListener(playerListener)
+
         player = newWrapped
         mediaSession?.player = newWrapped
 
-        if (sourceItem != null) {
-            // Re-build MediaItem to include MIME type which is crucial for Chromecast
-            val uri = sourceItem.localConfiguration?.uri ?: Uri.EMPTY
-            
-            // Use Media3's built-in utilities to infer the content type and MIME type
-            // from the extension or URI structure, supporting HLS, MP3, AAC, M4A, etc.
-            val type = androidx.media3.common.util.Util.inferContentType(uri)
-            val mimeType = when (type) {
-                C.CONTENT_TYPE_HLS -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
-                C.CONTENT_TYPE_DASH -> androidx.media3.common.MimeTypes.APPLICATION_MPD
-                C.CONTENT_TYPE_SS -> androidx.media3.common.MimeTypes.APPLICATION_SS
-                else -> {
-                    // For progressive streams (MP3, AAC, M4A, etc.), infer from extension
-                    val extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(uri.toString())
-                    android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-                }
-            }
-
-            val castItem = sourceItem.buildUpon()
-                .setMimeType(mimeType)
-                .build()
-
-            newPlayer.setMediaItem(castItem, currentPosition)
-            newPlayer.prepare()
-            if (wasPlaying) {
-                newPlayer.play()
-            }
-        }
-
         if (newPlayer == basePlayer) {
             castPlayer?.stop()
+            castPlayer?.removeListener(playerListener)
         } else {
             // Stop local player entirely to free resources (decoders, network)
             // and prevent it from running in the background during casting.
             basePlayer?.stop()
+            basePlayer?.removeListener(playerListener)
         }
-        
+
+        if (sourceItem != null && isSwitchingToCast) {
+            // The MediaSession pipeline sends items without URIs (mediaId-only) and resolves
+            // them lazily via onAddMediaItems. When switching to Cast, localConfiguration will
+            // therefore be null. Resolve the real stream URL from the stations list by mediaId.
+            val resolvedUri: Uri = sourceItem.localConfiguration?.uri
+                ?: run {
+                    val mediaId = sourceItem.mediaId
+                    if (mediaId.startsWith("station_")) {
+                        val index = mediaId.substringAfter("station_").toIntOrNull()
+                        if (index != null && index in stations.indices) {
+                            Uri.parse(stations[index].streamURL)
+                        } else null
+                    } else null
+                }
+                ?: Uri.EMPTY
+
+            if (resolvedUri == Uri.EMPTY) {
+                Log.e(TAG, "setCurrentPlayer: could not resolve URI for ${sourceItem.mediaId} — aborting switch")
+                updateDisplayMetadata()
+                return
+            }
+
+            // The Chromecast Default Media Receiver does not follow HTTP 302 redirects
+            // reliably for HLS streams. Resolve the final URL on the Android side first
+            // so the receiver gets a direct, stable playlist URL.
+            serviceScope.launch(Dispatchers.IO) {
+                val finalUri = resolveRedirects(resolvedUri)
+
+                // Infer MIME type from the final (post-redirect) URL so the receiver
+                // knows how to handle it even if the path looks opaque.
+                val type = androidx.media3.common.util.Util.inferContentType(finalUri)
+                val mimeType = when (type) {
+                    C.CONTENT_TYPE_HLS -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                    C.CONTENT_TYPE_DASH -> androidx.media3.common.MimeTypes.APPLICATION_MPD
+                    C.CONTENT_TYPE_SS -> androidx.media3.common.MimeTypes.APPLICATION_SS
+                    else -> {
+                        val extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(finalUri.toString())
+                        android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                            ?: "application/vnd.apple.mpegurl"
+                    }
+                }
+
+                Log.d(TAG, "setCurrentPlayer: switching to CastPlayer uri=$finalUri mimeType=$mimeType (original=$resolvedUri)")
+
+                withContext(Dispatchers.Main) {
+                    // Guard: if the user has already disconnected Cast by the time we resolve, bail.
+                    if (!isCasting) {
+                        Log.d(TAG, "setCurrentPlayer: cast session ended during redirect resolution, aborting")
+                        return@withContext
+                    }
+
+                    // CastPlayer.setMediaItem() drives the receiver via our custom
+                    // RadioMediaItemConverter, which sets STREAM_TYPE_LIVE for HLS and
+                    // safely reconstructs MediaItems from queue status without customData.
+                    val castItem = sourceItem.buildUpon()
+                        .setUri(finalUri)
+                        .setMimeType(mimeType)
+                        .build()
+                    newPlayer.setMediaItem(castItem, currentPosition)
+                    newPlayer.prepare()
+                    if (wasPlaying) newPlayer.play()
+                }
+            }
+        } else if (sourceItem != null) {
+            // Switching back to ExoPlayer — no redirect resolution needed, ExoPlayer handles it.
+            val resolvedUri: Uri = sourceItem.localConfiguration?.uri
+                ?: run {
+                    val mediaId = sourceItem.mediaId
+                    if (mediaId.startsWith("station_")) {
+                        val index = mediaId.substringAfter("station_").toIntOrNull()
+                        if (index != null && index in stations.indices) Uri.parse(stations[index].streamURL) else null
+                    } else null
+                }
+                ?: Uri.EMPTY
+
+            if (resolvedUri != Uri.EMPTY) {
+                val type = androidx.media3.common.util.Util.inferContentType(resolvedUri)
+                val mimeType = when (type) {
+                    C.CONTENT_TYPE_HLS -> androidx.media3.common.MimeTypes.APPLICATION_M3U8
+                    C.CONTENT_TYPE_DASH -> androidx.media3.common.MimeTypes.APPLICATION_MPD
+                    C.CONTENT_TYPE_SS -> androidx.media3.common.MimeTypes.APPLICATION_SS
+                    else -> {
+                        val extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(resolvedUri.toString())
+                        android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                            ?: "audio/mpeg"
+                    }
+                }
+                Log.d(TAG, "setCurrentPlayer: switching to ExoPlayerImpl uri=$resolvedUri mimeType=$mimeType")
+                val item = sourceItem.buildUpon().setUri(resolvedUri).setMimeType(mimeType).build()
+                newPlayer.setMediaItem(item, currentPosition)
+                newPlayer.prepare()
+                if (wasPlaying) newPlayer.play()
+            }
+        }
+
         updateDisplayMetadata()
     }
+
+
+
+    /**
+     * Follows HTTP redirects for a given URI and returns the final destination URL.
+     * The Chromecast Default Media Receiver does not reliably follow redirect chains
+     * for HLS streams, so we resolve them on the Android side before casting.
+     * Uses HEAD requests to avoid downloading the stream body.
+     */
+    private fun resolveRedirects(uri: Uri): Uri {
+        val urlString = uri.toString()
+        if (!urlString.startsWith("http")) return uri
+        return try {
+            val app = application as SwiftRadioApplication
+            val request = okhttp3.Request.Builder()
+                .url(urlString)
+                .head() // HEAD avoids downloading stream body; just follow headers
+                .build()
+            app.sharedOkHttpClient.newCall(request).execute().use { response ->
+                val finalUrl = response.request.url.toString()
+                if (finalUrl != urlString) {
+                    Log.d(TAG, "resolveRedirects: $urlString -> $finalUrl")
+                }
+                Uri.parse(finalUrl)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "resolveRedirects: failed to resolve $uri, using original", e)
+            uri // Fall back to original — CastPlayer will try anyway
+        }
+    }
+
 
     private fun initializePlayer() {
         val app = application as SwiftRadioApplication
@@ -1049,6 +1168,12 @@ class AudioService : MediaLibraryService() {
     }
 
     private fun retryCurrentItem(reason: String) {
+        // Never retry on behalf of the ExoPlayer while Cast is active —
+        // the local player is intentionally stopped during a cast session.
+        if (isCasting) {
+            Log.d(TAG, "Svc skipping retry (casting active) reason=$reason")
+            return
+        }
         retryCount += 1
         // Increase delay to give the system more time to release resources
         val delayMs = when {
@@ -1185,30 +1310,17 @@ class AudioService : MediaLibraryService() {
      */
     private inner class MetadataForwardingPlayer(val basePlayer: Player) : androidx.media3.common.ForwardingPlayer(basePlayer) {
         private var overrideMetadata: MediaMetadata? = null
-        private val listeners = mutableListOf<Player.Listener>()
 
         fun setOverrideMetadata(metadata: MediaMetadata?) {
             if (overrideMetadata == metadata) return
             overrideMetadata = metadata
-            
-            val currentMetadata = getMediaMetadata()
-            listeners.forEach { 
-                it.onMediaMetadataChanged(currentMetadata)
-                it.onPlaylistMetadataChanged(currentMetadata)
-            }
+            // Metadata consumers (MediaController, Android Auto) receive the updated values
+            // the next time they call getMediaMetadata() or getCurrentMediaItem().
+            // The session is explicitly updated via setPlaylistMetadata() in updateDisplayMetadata(),
+            // so no additional notification is needed here.
         }
 
         fun getOverrideMetadata(): MediaMetadata? = overrideMetadata
-
-        override fun addListener(listener: Player.Listener) {
-            super.addListener(listener)
-            listeners.add(listener)
-        }
-
-        override fun removeListener(listener: Player.Listener) {
-            super.removeListener(listener)
-            listeners.remove(listener)
-        }
 
         override fun getMediaMetadata(): MediaMetadata {
             val baseMetadata = super.getMediaMetadata()
@@ -1224,7 +1336,7 @@ class AudioService : MediaLibraryService() {
             // when we have an override (crucial for Android Auto)
             if (override.artworkData != null) {
                 builder.setArtworkData(override.artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                builder.setArtworkUri(override.artworkUri) // Use the override URI (might be null)
+                builder.setArtworkUri(override.artworkUri)
             } else if (override.artworkUri != null) {
                 builder.setArtworkUri(override.artworkUri)
                 builder.setArtworkData(null, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
@@ -1236,9 +1348,7 @@ class AudioService : MediaLibraryService() {
         override fun getCurrentMediaItem(): MediaItem? {
             val item = super.getCurrentMediaItem() ?: return null
             val override = overrideMetadata ?: return item
-            
             val newMetadata = getMediaMetadata()
-                
             return item.buildUpon()
                 .setMediaMetadata(newMetadata)
                 .build()

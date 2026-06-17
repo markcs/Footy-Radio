@@ -91,6 +91,8 @@ fun NowPlayingScreen(
     isPlaying: Boolean,
     isBuffering: Boolean = false,
     isLive: Boolean,
+    isCasting: Boolean = false,
+    castDeviceName: String? = null,
     currentPositionProvider: () -> Long,
     durationMs: Long,
     onPlayPauseClick: () -> Unit,
@@ -138,6 +140,30 @@ fun NowPlayingScreen(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            // Casting indicator
+            if (isCasting) {
+                val label = if (!castDeviceName.isNullOrBlank()) "Casting to $castDeviceName" else "Casting"
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_audio_output),
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 

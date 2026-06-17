@@ -23,6 +23,8 @@ import com.markcs.footyradio.data.ArtworkService
 import com.markcs.footyradio.data.RadioStation
 import com.markcs.footyradio.data.StationsRepository
 import com.google.common.util.concurrent.ListenableFuture
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,7 +47,9 @@ data class PlayerUiState(
     val isLive: Boolean = true,
     val durationMs: Long = 0L,
     val isError: Boolean = false,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val isCasting: Boolean = false,
+    val castDeviceName: String? = null
 )
 
 private data class RawPlaybackState(
@@ -93,6 +97,22 @@ class PlayerViewModel(
     private var positionPollingJob: Job? = null
     private var squiggleJob: Job? = null
     private var lastKnownMetadata: MediaMetadata = MediaMetadata.Builder().build()
+
+    // Cast state listener — lives on the main thread, no service round-trip needed
+    private val castStateListener = com.google.android.gms.cast.framework.CastStateListener { state ->
+        val casting = state == CastState.CONNECTED
+        val deviceName = try {
+            CastContext.getSharedInstance(getApplication())
+                .sessionManager
+                .currentCastSession
+                ?.castDevice
+                ?.friendlyName
+        } catch (e: Exception) { null }
+        uiState = uiState.copy(
+            isCasting = casting,
+            castDeviceName = if (casting) deviceName else null
+        )
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -144,6 +164,11 @@ class PlayerViewModel(
         observeRawState()
         loadStations()
         startSquigglePolling()
+        try {
+            CastContext.getSharedInstance(getApplication()).addCastStateListener(castStateListener)
+        } catch (e: Exception) {
+            // Cast not available on this device — safe to ignore
+        }
     }
 
     // --- Public API ---
@@ -263,6 +288,9 @@ class PlayerViewModel(
     override fun onCleared() {
         artworkLookupJob?.cancel()
         disconnectController()
+        try {
+            CastContext.getSharedInstance(getApplication()).removeCastStateListener(castStateListener)
+        } catch (e: Exception) { /* ignore */ }
         super.onCleared()
     }
 

@@ -138,6 +138,8 @@ class MainActivity : FragmentActivity() {
                                     aTeam = state.liveScoreATeam,
                                     isBuffering = state.isBuffering,
                                     isLive = state.isLive,
+                                    isCasting = state.isCasting,
+                                    castDeviceName = state.castDeviceName,
                                     currentPositionProvider = { vm.currentPositionMs },
                                     durationMs = state.durationMs,
                                     onPlayPauseClick = { vm.togglePlayPause() },
@@ -193,6 +195,8 @@ class MainActivity : FragmentActivity() {
                                         isLive = state.isLive,
                                         hTeam = state.liveScoreHTeam,
                                         aTeam = state.liveScoreATeam,
+                                        isCasting = state.isCasting,
+                                        castDeviceName = state.castDeviceName,
                                         onPlayPauseClick = { vm.togglePlayPause() }
                                     )
                                 }
