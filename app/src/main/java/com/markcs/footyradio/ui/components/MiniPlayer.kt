@@ -50,6 +50,8 @@ fun MiniPlayer(
     liveScore: String? = null,
     isPlaying: Boolean,
     isLive: Boolean = true,
+    isCasting: Boolean = false,
+    castDeviceName: String? = null,
     onPlayPauseClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -71,10 +73,10 @@ fun MiniPlayer(
         stationName
     }
 
-    val displaySubtitle = if (liveScore != null && hasTrackMetadata) {
-        songMetadata
-    } else {
-        stationName
+    val displaySubtitle = when {
+        isCasting && castDeviceName != null -> "Casting to $castDeviceName"
+        liveScore != null && hasTrackMetadata -> songMetadata
+        else -> stationName
     }
 
     Row(

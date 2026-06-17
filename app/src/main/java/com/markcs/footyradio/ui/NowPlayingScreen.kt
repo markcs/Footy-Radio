@@ -43,6 +43,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.app.MediaRouteButton
+import androidx.appcompat.view.ContextThemeWrapper
+import com.google.android.gms.cast.framework.CastButtonFactory
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -89,6 +93,8 @@ fun NowPlayingScreen(
     isPlaying: Boolean,
     isBuffering: Boolean = false,
     isLive: Boolean,
+    isCasting: Boolean = false,
+    castDeviceName: String? = null,
     currentPositionProvider: () -> Long,
     durationMs: Long,
     onPlayPauseClick: () -> Unit,
@@ -399,27 +405,15 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val intent = Intent("com.android.settings.panel.action.MEDIA_OUTPUT").apply {
-                                putExtra("com.android.settings.panel.extra.PACKAGE_NAME", context.packageName)
-                            }
-                            context.startActivity(intent)
-                        } else {
-                            context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                AndroidView(
+                    factory = { ctx ->
+                        val themedContext = ContextThemeWrapper(ctx, R.style.Theme_MediaRoute)
+                        MediaRouteButton(themedContext).apply {
+                            CastButtonFactory.setUpMediaRouteButton(themedContext, this)
                         }
-                    } catch (_: Exception) {
-                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
-                    }
-                }) {
-                    Icon(
-                        imageVector = Icons.Outlined.Speaker,
-                        contentDescription = stringResource(R.string.cd_audio_output),
-                        tint = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                    },
+                    modifier = Modifier.size(48.dp)
+                )
 
                 Spacer(modifier = Modifier.width(24.dp))
 
@@ -431,6 +425,16 @@ fun NowPlayingScreen(
                         modifier = Modifier.size(24.dp)
                     )
                 }
+            }
+
+            // Casting indicator
+            if (isCasting && castDeviceName != null) {
+                Text(
+                    text = "Casting to $castDeviceName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
             }
         }
 

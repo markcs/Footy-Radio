@@ -27,6 +27,10 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
+import com.google.android.gms.cast.framework.CastContext
+import androidx.media3.common.MimeTypes
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.session.LibraryResult
@@ -61,6 +65,7 @@ class AudioService : MediaLibraryService() {
     private var mediaSession: MediaLibrarySession? = null
     private var player: Player? = null
     private var basePlayer: ExoPlayer? = null
+    private var castPlayer: CastPlayer? = null
     
     private var retryJob: Job? = null
     private var bufferingRecoveryJob: Job? = null
@@ -358,7 +363,115 @@ class AudioService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         initializePlayer()
+        try {
+            initializeCastPlayer()
+        } catch (e: Exception) {
+            Log.e(TAG, "CastPlayer initialization failed", e)
+        }
         loadStationsForBrowse()
+    }
+
+    private fun initializeCastPlayer() {
+        val castContext = CastContext.getSharedInstance(this)
+        castPlayer = CastPlayer(castContext)
+        castPlayer?.addListener(playerListener)
+        castPlayer?.setSessionAvailabilityListener(object : SessionAvailabilityListener {
+            override fun onCastSessionAvailable() {
+                switchToCastPlayer()
+            }
+
+            override fun onCastSessionUnavailable() {
+                switchToLocalPlayer()
+            }
+        })
+    }
+
+    private fun switchToCastPlayer() {
+        val cast = castPlayer ?: return
+        val local = basePlayer ?: return
+        if (player is MetadataForwardingPlayer && (player as MetadataForwardingPlayer).isCasting()) return
+
+        val currentMediaItem = local.currentMediaItem ?: return
+        val currentMediaId = currentMediaItem.mediaId
+        val playWhenReady = local.playWhenReady
+
+        Log.d(TAG, "Switching to CastPlayer (Single Item): currentMediaId=$currentMediaId")
+
+        serviceScope.launch {
+            val station = stations.firstOrNull { it.name == currentMediaItem.mediaMetadata.title }
+            val originalUrl = station?.streamURL ?: ""
+            
+            // Resolve the current station URL (following 302s and master playlists)
+            val (finalUrl, resolvedContentType) = resolveStreamUrl(originalUrl)
+
+            // Sanitize metadata for Chromecast
+            val sanitizedMetadata = currentMediaItem.mediaMetadata.buildUpon()
+                .setArtworkData(null, null)
+                .apply {
+                    val uri = currentMediaItem.mediaMetadata.artworkUri
+                    if (uri != null && uri.scheme != "http" && uri.scheme != "https") {
+                        setArtworkUri(null)
+                    }
+                }
+                .build()
+
+            // Strictly use application/x-mpegURL for HLS on Chromecast
+            val mimeType = when {
+                resolvedContentType?.contains("mpegurl", ignoreCase = true) == true -> MimeTypes.APPLICATION_M3U8
+                finalUrl.contains(".m3u8") || finalUrl.contains(".m3u") -> MimeTypes.APPLICATION_M3U8
+                resolvedContentType?.contains("mpeg", ignoreCase = true) == true -> MimeTypes.AUDIO_MPEG
+                finalUrl.contains(".mp3") || finalUrl.contains("/mp3") || finalUrl.endsWith(";") -> MimeTypes.AUDIO_MPEG
+                else -> null
+            }
+
+            val castItem = currentMediaItem.buildUpon()
+                .setUri(finalUrl)
+                .setMimeType(mimeType)
+                .setMediaMetadata(sanitizedMetadata)
+                .build()
+            
+            Log.d(TAG, "Casting Single Item: ID=${castItem.mediaId}, URI=${castItem.localConfiguration?.uri}, MIME=${castItem.localConfiguration?.mimeType}")
+
+            // Swap player in session
+            val wrappedPlayer = MetadataForwardingPlayer(cast)
+            player = wrappedPlayer
+            mediaSession?.player = wrappedPlayer
+
+            // Set single item and play at live edge
+            cast.setMediaItem(castItem, C.TIME_UNSET)
+            cast.playWhenReady = playWhenReady
+            cast.prepare()
+            cast.play()
+
+            // Stop and clear local player
+            local.stop()
+            local.clearMediaItems()
+            
+            updateDisplayMetadata()
+        }
+    }
+
+    private fun switchToLocalPlayer() {
+        val cast = castPlayer ?: return
+        val local = basePlayer ?: return
+        if (player is MetadataForwardingPlayer && !(player as MetadataForwardingPlayer).isCasting()) return
+
+        Log.d(TAG, "Switching to LocalPlayer")
+        val currentItemIndex = cast.currentMediaItemIndex
+        val currentPosition = cast.currentPosition
+        val playWhenReady = cast.playWhenReady
+
+        local.setMediaItems(basePlayer?.currentTimeline?.let { timeline ->
+            List(timeline.windowCount) { i -> timeline.getWindow(i, Timeline.Window()).mediaItem }
+        } ?: browseMediaItems, currentItemIndex, currentPosition)
+        
+        local.playWhenReady = playWhenReady
+        local.prepare()
+        cast.stop()
+
+        val wrappedPlayer = MetadataForwardingPlayer(local)
+        player = wrappedPlayer
+        mediaSession?.player = wrappedPlayer
     }
 
     private fun initializePlayer() {
@@ -661,6 +774,7 @@ class AudioService : MediaLibraryService() {
             player.release()
             release()
         }
+        castPlayer?.release()
         player?.removeListener(playerListener)
         cancelRetry()
         cancelBufferingRecovery()
@@ -726,6 +840,7 @@ class AudioService : MediaLibraryService() {
             playableItems.add(MediaItem.Builder()
                 .setMediaId("station_$index")
                 .setUri(station.streamURL)
+                .setMimeType(MimeTypes.APPLICATION_M3U8) // Enforce HLS MIME type
                 .setMediaMetadata(metadataBuilder.build())
                 .build())
         }
@@ -912,6 +1027,45 @@ class AudioService : MediaLibraryService() {
         return "" to value.trim()
     }
 
+    private suspend fun resolveStreamUrl(originalUrl: String): Pair<String, String?> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val app = application as SwiftRadioApplication
+                val request = okhttp3.Request.Builder()
+                    .url(originalUrl)
+                    .build()
+                
+                app.sharedOkHttpClient.newCall(request).execute().use { response ->
+                    val resolvedUrl = response.request.url.toString()
+                    val contentType = response.header("Content-Type")
+                    
+                    // If it's a small HLS playlist, it might be a master playlist that only 
+                    // redirects to another playlist. Deep resolve it for Chromecast.
+                    if (contentType?.contains("mpegurl", ignoreCase = true) == true || 
+                        resolvedUrl.contains(".m3u8", ignoreCase = true)) {
+                        
+                        val body = response.body.string()
+                        if (body.startsWith("#EXTM3U")) {
+                            val lines = body.lines().map { it.trim() }
+                            val lastUrl = lines.lastOrNull { it.startsWith("http") }
+                            if (!lastUrl.isNullOrBlank()) {
+                                Log.d(TAG, "Deep resolved HLS: $resolvedUrl -> $lastUrl")
+                                return@withContext lastUrl to contentType
+                            }
+                        }
+                        return@withContext resolvedUrl to contentType
+                    }
+                    
+                    Log.d(TAG, "Resolved stream URL: $originalUrl -> $resolvedUrl (Type: $contentType)")
+                    resolvedUrl to contentType
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to resolve stream URL: $originalUrl", e)
+                originalUrl to null
+            }
+        }
+    }
+
     private fun retryCurrentItem(reason: String) {
         retryCount += 1
         // Increase delay to give the system more time to release resources
@@ -1050,6 +1204,8 @@ class AudioService : MediaLibraryService() {
     private inner class MetadataForwardingPlayer(val basePlayer: Player) : androidx.media3.common.ForwardingPlayer(basePlayer) {
         private var overrideMetadata: MediaMetadata? = null
         private val listeners = mutableListOf<Player.Listener>()
+
+        fun isCasting(): Boolean = basePlayer is CastPlayer
 
         fun setOverrideMetadata(metadata: MediaMetadata?) {
             if (overrideMetadata == metadata) return

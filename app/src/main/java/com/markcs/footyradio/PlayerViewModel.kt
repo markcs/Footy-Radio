@@ -19,6 +19,9 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
 import com.markcs.footyradio.data.ArtworkService
 import com.markcs.footyradio.data.RadioStation
 import com.markcs.footyradio.data.StationsRepository
@@ -45,7 +48,9 @@ data class PlayerUiState(
     val isLive: Boolean = true,
     val durationMs: Long = 0L,
     val isError: Boolean = false,
-    val isRefreshing: Boolean = false
+    val isRefreshing: Boolean = false,
+    val isCasting: Boolean = false,
+    val castDeviceName: String? = null
 )
 
 private data class RawPlaybackState(
@@ -55,7 +60,9 @@ private data class RawPlaybackState(
     val mediaId: String? = null,
     val metadata: MediaMetadata = MediaMetadata.Builder().build(),
     val isLive: Boolean = true,
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val isCasting: Boolean = false,
+    val castDeviceName: String? = null
 )
 
 class PlayerViewModel(
@@ -93,6 +100,34 @@ class PlayerViewModel(
     private var positionPollingJob: Job? = null
     private var squiggleJob: Job? = null
     private var lastKnownMetadata: MediaMetadata = MediaMetadata.Builder().build()
+
+    private val castContext: CastContext? by lazy {
+        try {
+            CastContext.getSharedInstance(application)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private val sessionManagerListener = object : SessionManagerListener<CastSession> {
+        override fun onSessionStarted(session: CastSession, sessionId: String) { updateCastState() }
+        override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) { updateCastState() }
+        override fun onSessionEnded(session: CastSession, error: Int) { updateCastState() }
+        override fun onSessionStarting(session: CastSession) {}
+        override fun onSessionStartFailed(session: CastSession, error: Int) { updateCastState() }
+        override fun onSessionEnding(session: CastSession) {}
+        override fun onSessionResuming(session: CastSession, sessionId: String) {}
+        override fun onSessionResumeFailed(session: CastSession, error: Int) { updateCastState() }
+        override fun onSessionSuspended(session: CastSession, reason: Int) {}
+    }
+
+    private fun updateCastState() {
+        val session = castContext?.sessionManager?.currentCastSession
+        val isCasting = session?.isConnected == true
+        val deviceName = session?.castDevice?.friendlyName
+        
+        controller?.let { publishState(it) }
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -144,6 +179,7 @@ class PlayerViewModel(
         observeRawState()
         loadStations()
         startSquigglePolling()
+        castContext?.sessionManager?.addSessionManagerListener(sessionManagerListener, CastSession::class.java)
     }
 
     // --- Public API ---
@@ -261,6 +297,7 @@ class PlayerViewModel(
     }
 
     override fun onCleared() {
+        castContext?.sessionManager?.removeSessionManagerListener(sessionManagerListener, CastSession::class.java)
         artworkLookupJob?.cancel()
         disconnectController()
         super.onCleared()
@@ -300,6 +337,10 @@ class PlayerViewModel(
         
         currentPositionMs = controller.currentPosition.coerceAtLeast(0)
         
+        val castSession = castContext?.sessionManager?.currentCastSession
+        val isCasting = castSession?.isConnected == true
+        val castDeviceName = if (isCasting) castSession?.castDevice?.friendlyName else null
+
         _rawState.value = RawPlaybackState(
             playWhenReady = controller.playWhenReady,
             isPlaying = controller.isPlaying,
@@ -308,7 +349,9 @@ class PlayerViewModel(
             mediaId = controller.currentMediaItem?.mediaId,
             metadata = metadata,
             isLive = controller.isCurrentMediaItemLive || duration <= 0,
-            durationMs = duration
+            durationMs = duration,
+            isCasting = isCasting,
+            castDeviceName = castDeviceName
         )
     }
 
@@ -359,7 +402,9 @@ class PlayerViewModel(
                     isPlaying = raw.playWhenReady,
                     isBuffering = raw.isBuffering,
                     isLive = raw.isLive,
-                    durationMs = raw.durationMs
+                    durationMs = raw.durationMs,
+                    isCasting = raw.isCasting,
+                    castDeviceName = raw.castDeviceName
                 )
                 
                 // Only apply metadata when the intent is to play (not strictly audio outputting)
