@@ -118,7 +118,7 @@ class AudioService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "/"
         private const val TAG = "AudioService"
-        private const val CAST_BUFFERING_TIMEOUT = 35_000L
+        private const val CAST_BUFFERING_TIMEOUT = 12_000L
     }
 
     private val playerListener = object : Player.Listener {
