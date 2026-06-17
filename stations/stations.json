@@ -6,7 +6,7 @@
          "longDesc" : "",
          "name" : "Nova 100",
          "streamURLs" : [
-            "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128x.m3u8",
+            "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.m3u8",
             "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100.mp3"
          ],
          "website" : "https://www.novafm.com.au/melbourne"
