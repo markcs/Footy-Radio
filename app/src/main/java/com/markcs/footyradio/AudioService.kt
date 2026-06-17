@@ -69,8 +69,11 @@ class AudioService : MediaLibraryService() {
     
     private var retryJob: Job? = null
     private var bufferingRecoveryJob: Job? = null
+    private var castBufferingRecoveryJob: Job? = null
     private var stallRecoveryJob: Job? = null
     
+    private var currentStreamIndex = 0
+
     private var currentLiveScore: LiveScoreState? = null
     private var currentIcyTitle: String? = null
     private var currentManifestMetadata: MediaMetadata? = null
@@ -102,6 +105,7 @@ class AudioService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "/"
         private const val TAG = "AudioService"
+        private const val CAST_BUFFERING_TIMEOUT = 35_000L
     }
 
     private val playerListener = object : Player.Listener {
@@ -156,6 +160,7 @@ class AudioService : MediaLibraryService() {
             Log.d(TAG, "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
+            currentStreamIndex = 0
             currentIcyTitle = null
             currentManifestMetadata = null
             lastArtworkLookupTerm = null
@@ -189,15 +194,23 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_READY -> {
                     retryCount = 0
                     cancelBufferingRecovery()
+                    cancelCastBufferingRecovery()
                     startStallRecovery()
                 }
-                Player.STATE_BUFFERING -> scheduleBufferingRecovery()
+                Player.STATE_BUFFERING -> {
+                    if (isCasting()) {
+                        scheduleCastBufferingRecovery()
+                    } else {
+                        scheduleBufferingRecovery()
+                    }
+                }
                 Player.STATE_ENDED -> {
                     cancelStallRecovery()
                     retryCurrentItem("state_ended")
                 }
                 Player.STATE_IDLE -> {
                     cancelBufferingRecovery()
+                    cancelCastBufferingRecovery()
                     cancelStallRecovery()
                 }
             }
@@ -386,21 +399,28 @@ class AudioService : MediaLibraryService() {
         })
     }
 
-    private fun switchToCastPlayer() {
+    private fun switchToCastPlayer(streamUrlOverride: String? = null) {
         val cast = castPlayer ?: return
         val local = basePlayer ?: return
-        if (player is MetadataForwardingPlayer && (player as MetadataForwardingPlayer).isCasting()) return
+        
+        // If already casting and no override, do nothing
+        if (streamUrlOverride == null && player is MetadataForwardingPlayer && (player as MetadataForwardingPlayer).isCasting()) return
 
-        val currentMediaItem = local.currentMediaItem ?: return
-        val currentMediaId = currentMediaItem.mediaId
+        val currentMediaItem = local.currentMediaItem ?: player?.currentMediaItem ?: return
         val playWhenReady = local.playWhenReady
 
-        Log.d(TAG, "Switching to CastPlayer (Single Item): currentMediaId=$currentMediaId")
+        Log.d(TAG, "Switching to CastPlayer: currentMediaId=${currentMediaItem.mediaId} override=$streamUrlOverride")
 
         serviceScope.launch {
-            val station = stations.firstOrNull { it.name == currentMediaItem.mediaMetadata.title }
-            val originalUrl = station?.streamURL ?: ""
-            
+            val originalUrl = streamUrlOverride ?: currentMediaItem.localConfiguration?.uri?.toString()
+                ?: stations.firstOrNull { it.name == currentMediaItem.mediaMetadata.title }?.streamURL
+                ?: ""
+
+            if (originalUrl.isBlank()) {
+                Log.e(TAG, "switchToCastPlayer: could not determine stream URL, aborting cast switch")
+                return@launch
+            }
+
             // Resolve the current station URL (following 302s and master playlists)
             val (finalUrl, resolvedContentType) = resolveStreamUrl(originalUrl)
 
@@ -430,15 +450,15 @@ class AudioService : MediaLibraryService() {
                 .setMediaMetadata(sanitizedMetadata)
                 .build()
             
-            Log.d(TAG, "Casting Single Item: ID=${castItem.mediaId}, URI=${castItem.localConfiguration?.uri}, MIME=${castItem.localConfiguration?.mimeType}")
+            Log.d(TAG, "Casting Item: ID=${castItem.mediaId}, URI=${castItem.localConfiguration?.uri}, MIME=${castItem.localConfiguration?.mimeType}")
 
             // Swap player in session
             val wrappedPlayer = MetadataForwardingPlayer(cast)
             player = wrappedPlayer
             mediaSession?.player = wrappedPlayer
 
-            // Set single item and play at live edge
-            cast.setMediaItem(castItem, C.TIME_UNSET)
+            // Set single item and play at live edge.
+            cast.setMediaItem(castItem, /* startPositionMs= */ 0L)
             cast.playWhenReady = playWhenReady
             cast.prepare()
             cast.play()
@@ -448,6 +468,7 @@ class AudioService : MediaLibraryService() {
             local.clearMediaItems()
             
             updateDisplayMetadata()
+            scheduleCastBufferingRecovery()
         }
     }
 
@@ -778,6 +799,7 @@ class AudioService : MediaLibraryService() {
         player?.removeListener(playerListener)
         cancelRetry()
         cancelBufferingRecovery()
+        cancelCastBufferingRecovery()
         cancelStallRecovery()
         stopSquigglePolling()
         player = null
@@ -1028,47 +1050,63 @@ class AudioService : MediaLibraryService() {
     }
 
     private suspend fun resolveStreamUrl(originalUrl: String): Pair<String, String?> {
+        if (originalUrl.isBlank()) return "" to null
         return withContext(Dispatchers.IO) {
             try {
                 val app = application as SwiftRadioApplication
-                val request = okhttp3.Request.Builder()
+                // HEAD request: follow redirects to get the stable post-302 URL without
+                // downloading the body. We intentionally stop here and do NOT deep-resolve
+                // into the master playlist's child playlist URL.
+                val headRequest = okhttp3.Request.Builder()
                     .url(originalUrl)
+                    .head()
                     .build()
-                
-                app.sharedOkHttpClient.newCall(request).execute().use { response ->
+
+                app.sharedOkHttpClient.newCall(headRequest).execute().use { response ->
                     val resolvedUrl = response.request.url.toString()
                     val contentType = response.header("Content-Type")
-                    
-                    // If it's a small HLS playlist, it might be a master playlist that only 
-                    // redirects to another playlist. Deep resolve it for Chromecast.
-                    if (contentType?.contains("mpegurl", ignoreCase = true) == true || 
-                        resolvedUrl.contains(".m3u8", ignoreCase = true)) {
-                        
-                        val body = response.body.string()
-                        if (body.startsWith("#EXTM3U")) {
-                            val lines = body.lines().map { it.trim() }
-                            val lastUrl = lines.lastOrNull { it.startsWith("http") }
-                            if (!lastUrl.isNullOrBlank()) {
-                                Log.d(TAG, "Deep resolved HLS: $resolvedUrl -> $lastUrl")
-                                return@withContext lastUrl to contentType
-                            }
-                        }
-                        return@withContext resolvedUrl to contentType
-                    }
-                    
-                    Log.d(TAG, "Resolved stream URL: $originalUrl -> $resolvedUrl (Type: $contentType)")
-                    resolvedUrl to contentType
+                    Log.d(TAG, "Resolved stream URL (302 only): $originalUrl -> $resolvedUrl (Type: $contentType)")
+                    return@withContext resolvedUrl to contentType
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to resolve stream URL: $originalUrl", e)
-                originalUrl to null
+                return@withContext originalUrl to null
             }
         }
     }
 
+    private fun isCasting(): Boolean {
+        return player is MetadataForwardingPlayer && (player as MetadataForwardingPlayer).isCasting()
+    }
+
     private fun retryCurrentItem(reason: String) {
+        val currentItem = basePlayer?.currentMediaItem ?: player?.currentMediaItem ?: return
+        val stationName = currentItem.mediaMetadata.title?.toString()
+        val station = stations.firstOrNull { it.name == stationName }
+        
+        if (station != null && currentStreamIndex < station.streamURLs.size - 1) {
+            currentStreamIndex++
+            Log.w(TAG, "Svc attempting fallback stream for '${station.name}' index=$currentStreamIndex reason=$reason")
+            
+            val nextStreamUrl = station.streamURLs[currentStreamIndex]
+            if (isCasting()) {
+                switchToCastPlayer(nextStreamUrl)
+            } else {
+                val updatedItem = currentItem.buildUpon()
+                    .setUri(nextStreamUrl)
+                    .build()
+                performLocalRetry(updatedItem, 1000L)
+            }
+            return
+        }
+
+        // No more fallbacks, perform standard retry
+        if (isCasting()) {
+            Log.d(TAG, "Svc skipping retry (casting, no more fallbacks): reason=$reason")
+            return
+        }
+        
         retryCount += 1
-        // Increase delay to give the system more time to release resources
         val delayMs = when {
             retryCount <= 1 -> 3000L 
             retryCount <= 2 -> 5000L
@@ -1076,12 +1114,12 @@ class AudioService : MediaLibraryService() {
         }
 
         Log.d(TAG, "Svc retrying current item reason=$reason count=$retryCount delay=${delayMs}ms")
+        performLocalRetry(currentItem, delayMs)
+    }
+
+    private fun performLocalRetry(mediaItem: MediaItem, delayMs: Long) {
         cancelRetry()
         retryJob = serviceScope.launch {
-            val activePlayer = player ?: return@launch
-            val currentItem = basePlayer?.currentMediaItem ?: activePlayer.currentMediaItem ?: return@launch
-
-            // Robust reset: Release player completely to clear hardware codec resources (Resource 6)
             try {
                 player?.release()
             } catch (e: Exception) {
@@ -1095,7 +1133,7 @@ class AudioService : MediaLibraryService() {
             // Re-initialize from scratch
             initializePlayer()
             val freshPlayer = player ?: return@launch
-            freshPlayer.setMediaItem(currentItem)
+            freshPlayer.setMediaItem(mediaItem)
             freshPlayer.prepare()
             freshPlayer.play()
         }
@@ -1107,9 +1145,10 @@ class AudioService : MediaLibraryService() {
     }
 
     private fun scheduleBufferingRecovery() {
+        if (isCasting()) return
         cancelBufferingRecovery()
         bufferingRecoveryJob = serviceScope.launch {
-            delay(20_000L) // Conservative timeout for initial buffering
+            delay(20_000L)
             val activePlayer = player ?: return@launch
             if (activePlayer.playbackState == Player.STATE_BUFFERING && activePlayer.playWhenReady) {
                 retryCurrentItem("buffer_timeout")
@@ -1117,7 +1156,30 @@ class AudioService : MediaLibraryService() {
         }
     }
 
+    private fun scheduleCastBufferingRecovery() {
+        cancelCastBufferingRecovery()
+        castBufferingRecoveryJob = serviceScope.launch {
+            delay(CAST_BUFFERING_TIMEOUT)
+            val activePlayer = player ?: return@launch
+            if (isCasting() && activePlayer.playbackState == Player.STATE_BUFFERING && activePlayer.playWhenReady) {
+                Log.w(TAG, "Svc cast buffering timeout triggered")
+                retryCurrentItem("cast_buffer_timeout")
+            }
+        }
+    }
+
+    private fun cancelBufferingRecovery() {
+        bufferingRecoveryJob?.cancel()
+        bufferingRecoveryJob = null
+    }
+
+    private fun cancelCastBufferingRecovery() {
+        castBufferingRecoveryJob?.cancel()
+        castBufferingRecoveryJob = null
+    }
+
     private fun startStallRecovery() {
+        if (isCasting()) return
         val activePlayer = player ?: return
         lastObservedPositionMs = activePlayer.currentPosition.coerceAtLeast(0L)
         lastPositionRealtimeMs = SystemClock.elapsedRealtime()
@@ -1150,7 +1212,7 @@ class AudioService : MediaLibraryService() {
             val currentSequence = if (manifest is HlsManifest) manifest.mediaPlaylist.mediaSequence else -1L
             val targetDurationMs = if (manifest is HlsManifest) manifest.mediaPlaylist.targetDurationUs / 1000 else 6000L
             
-            // If HLS sequence has advanced, the playlist is updating. This is the strongest sign of health.
+            // If HLS sequence has advanced, the playlist is updating.
             if (currentSequence != -1L && currentSequence > lastObservedSequenceNumber) {
                 lastObservedSequenceNumber = currentSequence
                 lastPositionRealtimeMs = nowRealtime
@@ -1167,28 +1229,17 @@ class AudioService : MediaLibraryService() {
                 return@launch
             }
             
-            // If we are in READY and position is not moving, but we are near the live edge, it might be normal.
-            // We use a very conservative threshold (30s or 4x target duration) to avoid false positives.
             val stallThresholdMs = (targetDurationMs * 4).coerceAtLeast(30_000L)
             val stallDuration = nowRealtime - lastPositionRealtimeMs
             
             if (stallDuration >= stallThresholdMs) {
-                Log.w(TAG, "Svc stall detected! duration=${stallDuration}ms position=$currentPosition buffer=$bufferedPosition seq=$currentSequence threshold=${stallThresholdMs}ms")
+                Log.w(TAG, "Svc stall detected! duration=${stallDuration}ms position=$currentPosition threshold=${stallThresholdMs}ms")
                 retryCurrentItem("stall_ready")
                 return@launch
             }
             
-            if (stallDuration % 5000L < 500L) {
-                Log.d(TAG, "Svc monitoring potential stall: duration=${stallDuration}ms pos=$currentPosition buffer=$bufferedPosition seq=$currentSequence")
-            }
-            
             scheduleStallCheck()
         }
-    }
-
-    private fun cancelBufferingRecovery() {
-        bufferingRecoveryJob?.cancel()
-        bufferingRecoveryJob = null
     }
 
     private fun cancelStallRecovery() {

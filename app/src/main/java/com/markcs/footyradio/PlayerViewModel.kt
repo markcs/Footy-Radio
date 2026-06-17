@@ -563,7 +563,7 @@ class PlayerViewModel(
         val newStation = RadioStation(
             id = "custom_${System.currentTimeMillis()}",
             name = name,
-            streamURL = url,
+            streamURLs = listOf(url),
             imageURL = imageUrl.ifBlank { "stationImage.png" },
             desc = "User Added Station"
         )

@@ -4,13 +4,16 @@ import android.content.Context
 import com.google.android.gms.cast.framework.CastOptions
 import com.google.android.gms.cast.framework.OptionsProvider
 import com.google.android.gms.cast.framework.SessionProvider
-import androidx.media3.cast.DefaultCastOptionsProvider
+import com.google.android.gms.cast.CastMediaControlIntent
 
 class CastOptionsProvider : OptionsProvider {
     override fun getCastOptions(context: Context): CastOptions {
         return CastOptions.Builder()
-            // Use the default Media3 receiver or your own custom Shaka receiver ID
-            .setReceiverApplicationId(DefaultCastOptionsProvider.APP_ID_DEFAULT_RECEIVER_WITH_DRM)
+            // Use the standard Default Media Receiver for HLS audio streams.
+            // APP_ID_DEFAULT_RECEIVER_WITH_DRM requires specific LoadRequestData formatting
+            // and rejects plain HLS audio (application/vnd.apple.mpegurl), causing the
+            // CastPlayer to stall permanently in BUFFERING state.
+            .setReceiverApplicationId(CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID)
             .setStopReceiverApplicationWhenEndingSession(true)
             .build()
     }

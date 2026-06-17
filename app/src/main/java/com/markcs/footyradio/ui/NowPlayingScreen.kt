@@ -407,9 +407,19 @@ fun NowPlayingScreen(
             ) {
                 AndroidView(
                     factory = { ctx ->
+                        // MediaRouteButton reads the window background color to compute icon contrast.
+                        // Compose's LocalContext carries a transparent window background from
+                        // enableEdgeToEdge(), which triggers "background can not be translucent: #0".
+                        // Fix: wrap the context in a theme that declares an opaque colorBackground
+                        // so MediaRouterThemeHelper's contrast calculation gets a valid color.
+                        //
+                        // IMPORTANT: CastButtonFactory.setUpMediaRouteButton must receive the real
+                        // Activity context (ctx), NOT the ContextThemeWrapper — the Cast button
+                        // needs to find the FragmentActivity to show its dialog, and ContextThemeWrapper
+                        // breaks that lookup causing "activity must be a subclass of FragmentActivity".
                         val themedContext = ContextThemeWrapper(ctx, R.style.Theme_MediaRoute)
                         MediaRouteButton(themedContext).apply {
-                            CastButtonFactory.setUpMediaRouteButton(themedContext, this)
+                            CastButtonFactory.setUpMediaRouteButton(ctx, this)
                         }
                     },
                     modifier = Modifier.size(48.dp)

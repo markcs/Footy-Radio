@@ -85,8 +85,10 @@ class StationsRepository(
             saveToCache(fetched)
             fetched
         } catch (e: Exception) {
+            Log.e("StationsRepository", "Failed to fetch stations from $targetUrl", e)
             val cached = loadFromCache()
             if (cached.isNotEmpty()) {
+                Log.d("StationsRepository", "Using cached stations instead")
                 cached
             } else {
                 throw e
@@ -99,7 +101,14 @@ class StationsRepository(
         val uniqueStations = allStations.mapIndexed { index, station ->
             val finalId = if (station.id.isBlank()) "station_$index" else station.id
             
-            station.copy(id = finalId).apply {
+            // Normalize streams: if streamURLs is empty but legacyStreamURL is present, migrate it.
+            val normalizedStreamURLs = if (station.streamURLs.isEmpty() && station.legacyStreamURL.isNotBlank()) {
+                listOf(station.legacyStreamURL)
+            } else {
+                station.streamURLs
+            }
+
+            station.copy(id = finalId, streamURLs = normalizedStreamURLs).apply {
                 resolvedImageUrl = when {
                     imageURL.startsWith("http") -> imageURL
                     imageURL.isNotBlank() -> {
