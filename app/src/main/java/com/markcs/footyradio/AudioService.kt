@@ -1,5 +1,10 @@
 package com.markcs.footyradio
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Intent
+import android.os.Build
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioManager
@@ -27,6 +32,10 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
+import com.google.android.gms.cast.framework.CastContext
+import androidx.media3.common.MimeTypes
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.session.LibraryResult
@@ -61,11 +70,15 @@ class AudioService : MediaLibraryService() {
     private var mediaSession: MediaLibrarySession? = null
     private var player: Player? = null
     private var basePlayer: ExoPlayer? = null
+    private var castPlayer: CastPlayer? = null
     
     private var retryJob: Job? = null
     private var bufferingRecoveryJob: Job? = null
+    private var castBufferingRecoveryJob: Job? = null
     private var stallRecoveryJob: Job? = null
     
+    private var currentStreamIndex = 0
+
     private var currentLiveScore: LiveScoreState? = null
     private var currentIcyTitle: String? = null
     private var currentManifestMetadata: MediaMetadata? = null
@@ -80,6 +93,14 @@ class AudioService : MediaLibraryService() {
     private var lastObservedPositionMs: Long = 0L
     private var lastPositionRealtimeMs: Long = 0L
     private var lastObservedSequenceNumber: Long = -1L
+
+    // Preserved across local.clearMediaItems() so switchToLocalPlayer can restore playback
+    private var lastPlayedMediaItem: MediaItem? = null
+    // The URL index that is currently live on the cast device (mirrors currentStreamIndex for cast)
+    private var castingStreamIndex: Int = 0
+    // Wall-clock time (SystemClock.elapsedRealtime) when cast buffering first started for this
+    // stream. Reset to -1 when the cast stream reaches READY or is replaced.
+    private var castBufferingStartMs: Long = -1L
     private val audioManager: AudioManager by lazy {
         getSystemService(AudioManager::class.java)
     }
@@ -97,6 +118,7 @@ class AudioService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "/"
         private const val TAG = "AudioService"
+        private const val CAST_BUFFERING_TIMEOUT = 35_000L
     }
 
     private val playerListener = object : Player.Listener {
@@ -151,6 +173,9 @@ class AudioService : MediaLibraryService() {
             Log.d(TAG, "Svc media item transition reason=$reason uri='${mediaItem?.localConfiguration?.uri}'")
             cancelRetry()
             retryCount = 0
+            currentStreamIndex = 0
+            castingStreamIndex = 0
+            castBufferingStartMs = -1L
             currentIcyTitle = null
             currentManifestMetadata = null
             lastArtworkLookupTerm = null
@@ -184,9 +209,25 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_READY -> {
                     retryCount = 0
                     cancelBufferingRecovery()
+                    cancelCastBufferingRecovery()
+                    castBufferingStartMs = -1L
                     startStallRecovery()
                 }
-                Player.STATE_BUFFERING -> scheduleBufferingRecovery()
+                Player.STATE_BUFFERING -> {
+                    if (isCasting()) {
+                        // Record the very first time we enter BUFFERING for this cast stream.
+                        // We intentionally do NOT reschedule on repeated BUFFERING events —
+                        // the watchdog uses the original start time so transient IDLE→BUFFERING
+                        // cycles don't reset the 35s clock.
+                        if (castBufferingStartMs < 0L) {
+                            castBufferingStartMs = SystemClock.elapsedRealtime()
+                            Log.d(TAG, "Svc cast buffering watchdog armed at t=0")
+                        }
+                        scheduleCastBufferingRecovery()
+                    } else {
+                        scheduleBufferingRecovery()
+                    }
+                }
                 Player.STATE_ENDED -> {
                     cancelStallRecovery()
                     retryCurrentItem("state_ended")
@@ -194,6 +235,14 @@ class AudioService : MediaLibraryService() {
                 Player.STATE_IDLE -> {
                     cancelBufferingRecovery()
                     cancelStallRecovery()
+                    // Only cancel the cast buffering watchdog if we are genuinely NOT casting
+                    // (e.g. user stopped playback, or we switched back to local).
+                    // While casting, the CastPlayer regularly bounces through IDLE during HLS
+                    // playlist negotiation — cancelling here would disarm the watchdog prematurely.
+                    if (!isCasting()) {
+                        cancelCastBufferingRecovery()
+                        castBufferingStartMs = -1L
+                    }
                 }
             }
         }
@@ -358,7 +407,177 @@ class AudioService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
         initializePlayer()
+        try {
+            initializeCastPlayer()
+        } catch (e: Exception) {
+            Log.e(TAG, "CastPlayer initialization failed", e)
+        }
         loadStationsForBrowse()
+    }
+
+    private fun initializeCastPlayer() {
+        val castContext = CastContext.getSharedInstance(this)
+        castPlayer = CastPlayer(castContext)
+        castPlayer?.addListener(playerListener)
+        castPlayer?.setSessionAvailabilityListener(object : SessionAvailabilityListener {
+            override fun onCastSessionAvailable() {
+                switchToCastPlayer()
+            }
+
+            override fun onCastSessionUnavailable() {
+                switchToLocalPlayer()
+            }
+        })
+    }
+
+    private fun switchToCastPlayer(streamUrlOverride: String? = null) {
+        val cast = castPlayer ?: return
+        val local = basePlayer ?: return
+        
+        // If already casting and no override, do nothing
+        if (streamUrlOverride == null && player is MetadataForwardingPlayer && (player as MetadataForwardingPlayer).isCasting()) return
+
+        // When called as a fallback (override != null and already casting), local has already been
+        // cleared — use lastPlayedMediaItem for station metadata, falling back to the cast item.
+        val isFallbackRetry = streamUrlOverride != null && isCasting()
+        val currentMediaItem = when {
+            isFallbackRetry -> lastPlayedMediaItem ?: player?.currentMediaItem ?: return
+            else -> local.currentMediaItem ?: player?.currentMediaItem ?: return
+        }
+        val playWhenReady = if (isFallbackRetry) castPlayer?.playWhenReady ?: true else local.playWhenReady
+
+        Log.d(TAG, "Switching to CastPlayer: currentMediaId=${currentMediaItem.mediaId} override=$streamUrlOverride isFallback=$isFallbackRetry")
+
+        serviceScope.launch {
+            val originalUrl = streamUrlOverride ?: currentMediaItem.localConfiguration?.uri?.toString()
+                ?: stations.firstOrNull { it.name == currentMediaItem.mediaMetadata.title }?.streamURL
+                ?: ""
+
+            if (originalUrl.isBlank()) {
+                Log.e(TAG, "switchToCastPlayer: could not determine stream URL, aborting cast switch")
+                return@launch
+            }
+
+            // Resolve the current station URL (following 302s and master playlists)
+            val (finalUrl, resolvedContentType) = resolveStreamUrl(originalUrl)
+
+            // Sanitize metadata for Chromecast
+            val sanitizedMetadata = currentMediaItem.mediaMetadata.buildUpon()
+                .setArtworkData(null, null)
+                .apply {
+                    val uri = currentMediaItem.mediaMetadata.artworkUri
+                    if (uri != null && uri.scheme != "http" && uri.scheme != "https") {
+                        setArtworkUri(null)
+                    }
+                }
+                .build()
+
+            // Strictly use application/x-mpegURL for HLS on Chromecast
+            val mimeType = when {
+                resolvedContentType?.contains("mpegurl", ignoreCase = true) == true -> MimeTypes.APPLICATION_M3U8
+                finalUrl.contains(".m3u8") || finalUrl.contains(".m3u") -> MimeTypes.APPLICATION_M3U8
+                resolvedContentType?.contains("mpeg", ignoreCase = true) == true -> MimeTypes.AUDIO_MPEG
+                finalUrl.contains(".mp3") || finalUrl.contains("/mp3") || finalUrl.endsWith(";") -> MimeTypes.AUDIO_MPEG
+                else -> null
+            }
+
+            val castItem = currentMediaItem.buildUpon()
+                .setUri(finalUrl)
+                .setMimeType(mimeType)
+                .setMediaMetadata(sanitizedMetadata)
+                .build()
+            
+            Log.d(TAG, "Casting Item: ID=${castItem.mediaId}, URI=${castItem.localConfiguration?.uri}, MIME=${castItem.localConfiguration?.mimeType}")
+
+            // Remember the original (pre-cast) media item so switchToLocalPlayer can restore
+            // playback. Only update on the initial cast switch — not on fallback URL retries, so
+            // restoring local always goes back to the primary stream URL.
+            if (!isFallbackRetry) {
+                val stationForItem = getStationForMediaItem(currentMediaItem)
+                lastPlayedMediaItem = if (stationForItem != null) {
+                    currentMediaItem.buildUpon()
+                        .setUri(stationForItem.streamURL)
+                        .build()
+                } else {
+                    currentMediaItem
+                }
+                castingStreamIndex = 0
+            }
+
+            // Reset the buffering watchdog clock for the new stream so the 35s window
+            // always measures from when THIS stream started loading, not a previous one.
+            castBufferingStartMs = -1L
+            cancelCastBufferingRecovery()
+
+            // Re-read playWhenReady from the cast player at this point rather than using the
+            // value captured before the coroutine launched. resolveStreamUrl() takes ~1-2s over
+            // the network, and the user may have pressed Stop during that time. Honouring the
+            // current intent avoids the cast device restarting audio the user just stopped.
+            // For fallback retries: read from cast (local is already cleared).
+            // For initial switch: also re-read from local if still available, else use captured value.
+            val currentPlayWhenReady = when {
+                isFallbackRetry -> cast.playWhenReady
+                else -> local.playWhenReady.takeIf { local.currentMediaItem != null } ?: playWhenReady
+            }
+
+            // Swap player in session
+            val wrappedPlayer = MetadataForwardingPlayer(cast)
+            player = wrappedPlayer
+            mediaSession?.player = wrappedPlayer
+
+            // Set single item and play at live edge.
+            cast.setMediaItem(castItem, /* startPositionMs= */ 0L)
+            cast.playWhenReady = currentPlayWhenReady
+            cast.prepare()
+            if (currentPlayWhenReady) cast.play()
+
+            if (!isFallbackRetry) {
+                // Stop and clear local player only on initial cast switch.
+                // On fallback retries the local player is already stopped/cleared.
+                local.stop()
+                local.clearMediaItems()
+            }
+            
+            updateDisplayMetadata()
+            if (currentPlayWhenReady) scheduleCastBufferingRecovery()
+        }
+    }
+
+    private fun switchToLocalPlayer() {
+        val cast = castPlayer ?: return
+        val local = basePlayer ?: return
+        if (player is MetadataForwardingPlayer && !(player as MetadataForwardingPlayer).isCasting()) return
+
+        Log.d(TAG, "Switching to LocalPlayer")
+        val playWhenReady = cast.playWhenReady
+
+        // Swap to local player first so the session is updated immediately
+        val wrappedPlayer = MetadataForwardingPlayer(local)
+        player = wrappedPlayer
+        mediaSession?.player = wrappedPlayer
+
+        cast.stop()
+        cancelCastBufferingRecovery()
+        castBufferingStartMs = -1L
+
+        // Restore the station that was being cast. lastPlayedMediaItem is always set
+        // before local.clearMediaItems() is called in switchToCastPlayer, so this is
+        // the reliable source of truth for what to resume.
+        val itemToRestore = lastPlayedMediaItem
+        if (itemToRestore != null) {
+            Log.d(TAG, "Restoring local playback: mediaId=${itemToRestore.mediaId} uri=${itemToRestore.localConfiguration?.uri}")
+            // Reset stream index so local playback starts from the primary URL.
+            currentStreamIndex = 0
+            castingStreamIndex = 0
+            local.setMediaItem(itemToRestore)
+            local.playWhenReady = playWhenReady
+            local.prepare()
+            if (playWhenReady) local.play()
+        } else {
+            // Fallback: nothing was saved (shouldn't happen), leave player idle.
+            Log.w(TAG, "switchToLocalPlayer: no lastPlayedMediaItem to restore")
+            local.playWhenReady = false
+        }
     }
 
     private fun initializePlayer() {
@@ -655,15 +874,84 @@ class AudioService : MediaLibraryService() {
         return mediaSession
     }
 
+    /**
+     * Promote the service to foreground as soon as it is started (before Media3's
+     * MediaNotificationManager tries to do it). This prevents the
+     * ForegroundServiceStartNotAllowedException that occurs when the notification manager
+     * attempts startForegroundService() while the app is in the background (Android 12+).
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        ensureForeground()
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    private fun ensureForeground() {
+        val channelId = "footy_radio_playback"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val nm = getSystemService(NotificationManager::class.java)
+            if (nm.getNotificationChannel(channelId) == null) {
+                nm.createNotificationChannel(
+                    NotificationChannel(channelId, "Playback", NotificationManager.IMPORTANCE_LOW)
+                )
+            }
+        }
+        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, channelId)
+                .setSmallIcon(R.drawable.ic_play)
+                .setContentTitle(getString(R.string.app_name))
+                .setOngoing(true)
+                .build()
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+                .setSmallIcon(R.drawable.ic_play)
+                .setContentTitle(getString(R.string.app_name))
+                .setOngoing(true)
+                .build()
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+            } else {
+                startForeground(1, notification)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ensureForeground: startForeground failed (app may be backgrounding)", e)
+        }
+    }
+
+    /**
+     * Suppress ForegroundServiceStartNotAllowedException from Media3's notification manager.
+     * This is thrown when the player transitions to READY while the app is in the background
+     * (e.g. during a cast fallback stream switch). The cast audio continues uninterrupted —
+     * we just can't update the notification at that moment.
+     */
+    @Suppress("DEPRECATION")
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        try {
+            super.onUpdateNotification(session, startInForegroundRequired)
+        } catch (e: Exception) {
+            // ForegroundServiceStartNotAllowedException is only available as a class on API 31+
+            // but the message is consistent — catch broadly and log only non-trivially.
+            if (e.javaClass.simpleName == "ForegroundServiceStartNotAllowedException") {
+                Log.d(TAG, "onUpdateNotification: suppressed foreground-start-not-allowed (app in background)")
+            } else {
+                Log.w(TAG, "onUpdateNotification: unexpected error", e)
+            }
+        }
+    }
+
     override fun onDestroy() {
         serviceScope.cancel()
         mediaSession?.run {
             player.release()
             release()
         }
+        castPlayer?.release()
         player?.removeListener(playerListener)
         cancelRetry()
         cancelBufferingRecovery()
+        cancelCastBufferingRecovery()
         cancelStallRecovery()
         stopSquigglePolling()
         player = null
@@ -726,6 +1014,7 @@ class AudioService : MediaLibraryService() {
             playableItems.add(MediaItem.Builder()
                 .setMediaId("station_$index")
                 .setUri(station.streamURL)
+                .setMimeType(MimeTypes.APPLICATION_M3U8) // Enforce HLS MIME type
                 .setMediaMetadata(metadataBuilder.build())
                 .build())
         }
@@ -912,9 +1201,82 @@ class AudioService : MediaLibraryService() {
         return "" to value.trim()
     }
 
+    private suspend fun resolveStreamUrl(originalUrl: String): Pair<String, String?> {
+        if (originalUrl.isBlank()) return "" to null
+        return withContext(Dispatchers.IO) {
+            try {
+                val app = application as SwiftRadioApplication
+                // HEAD request: follow redirects to get the stable post-302 URL without
+                // downloading the body. We intentionally stop here and do NOT deep-resolve
+                // into the master playlist's child playlist URL.
+                val headRequest = okhttp3.Request.Builder()
+                    .url(originalUrl)
+                    .head()
+                    .build()
+
+                app.sharedOkHttpClient.newCall(headRequest).execute().use { response ->
+                    val resolvedUrl = response.request.url.toString()
+                    val contentType = response.header("Content-Type")
+                    Log.d(TAG, "Resolved stream URL (302 only): $originalUrl -> $resolvedUrl (Type: $contentType)")
+                    return@withContext resolvedUrl to contentType
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to resolve stream URL: $originalUrl", e)
+                return@withContext originalUrl to null
+            }
+        }
+    }
+
+    private fun isCasting(): Boolean {
+        return player is MetadataForwardingPlayer && (player as MetadataForwardingPlayer).isCasting()
+    }
+
     private fun retryCurrentItem(reason: String) {
+        // When casting, CastPlayer.currentMediaItem can return null if the remote receiver
+        // hasn't acknowledged the item yet (common during HLS buffering timeouts).
+        // Fall back to lastPlayedMediaItem which is always set before the local player is cleared.
+        val currentItemNullable = basePlayer?.currentMediaItem
+            ?: player?.currentMediaItem
+            ?: if (isCasting()) lastPlayedMediaItem else null
+        if (currentItemNullable == null) {
+            Log.w(TAG, "Svc retryCurrentItem: no current item available, reason=$reason")
+            return
+        }
+        val currentItem: MediaItem = currentItemNullable
+
+        Log.d(TAG, "Svc retryCurrentItem: reason=$reason mediaId=${currentItem.mediaId} isCasting=${isCasting()}")
+        val station = getStationForMediaItem(currentItem)
+        
+        if (station != null) {
+            // For casting, use castingStreamIndex; for local, use currentStreamIndex.
+            val activeIndex = if (isCasting()) castingStreamIndex else currentStreamIndex
+            if (activeIndex < station.streamURLs.size - 1) {
+                val nextIndex = activeIndex + 1
+                Log.w(TAG, "Svc attempting fallback stream for '${station.name}' index=$nextIndex reason=$reason")
+                
+                val nextStreamUrl = station.streamURLs[nextIndex]
+                if (isCasting()) {
+                    castingStreamIndex = nextIndex
+                    currentStreamIndex = nextIndex
+                    switchToCastPlayer(nextStreamUrl)
+                } else {
+                    currentStreamIndex = nextIndex
+                    val updatedItem = currentItem.buildUpon()
+                        .setUri(nextStreamUrl)
+                        .build()
+                    performLocalRetry(updatedItem, 1000L)
+                }
+                return
+            }
+        }
+
+        // No more fallbacks, perform standard retry
+        if (isCasting()) {
+            Log.d(TAG, "Svc skipping retry (casting, no more fallbacks): reason=$reason")
+            return
+        }
+        
         retryCount += 1
-        // Increase delay to give the system more time to release resources
         val delayMs = when {
             retryCount <= 1 -> 3000L 
             retryCount <= 2 -> 5000L
@@ -922,12 +1284,26 @@ class AudioService : MediaLibraryService() {
         }
 
         Log.d(TAG, "Svc retrying current item reason=$reason count=$retryCount delay=${delayMs}ms")
+        performLocalRetry(currentItem, delayMs)
+    }
+
+    /** Resolve a station for any media item, by mediaId first (reliable), then by title. */
+    private fun getStationForMediaItem(mediaItem: MediaItem): RadioStation? {
+        val mediaId = mediaItem.mediaId
+        if (mediaId.startsWith("station_")) {
+            val index = mediaId.substringAfter("station_").toIntOrNull()
+            if (index != null && index in stations.indices) {
+                return stations[index]
+            }
+        }
+        // Fallback: match by station name in metadata title
+        val stationName = mediaItem.mediaMetadata.title?.toString()
+        return if (!stationName.isNullOrBlank()) stations.firstOrNull { it.name == stationName } else null
+    }
+
+    private fun performLocalRetry(mediaItem: MediaItem, delayMs: Long) {
         cancelRetry()
         retryJob = serviceScope.launch {
-            val activePlayer = player ?: return@launch
-            val currentItem = basePlayer?.currentMediaItem ?: activePlayer.currentMediaItem ?: return@launch
-
-            // Robust reset: Release player completely to clear hardware codec resources (Resource 6)
             try {
                 player?.release()
             } catch (e: Exception) {
@@ -941,7 +1317,7 @@ class AudioService : MediaLibraryService() {
             // Re-initialize from scratch
             initializePlayer()
             val freshPlayer = player ?: return@launch
-            freshPlayer.setMediaItem(currentItem)
+            freshPlayer.setMediaItem(mediaItem)
             freshPlayer.prepare()
             freshPlayer.play()
         }
@@ -953,9 +1329,10 @@ class AudioService : MediaLibraryService() {
     }
 
     private fun scheduleBufferingRecovery() {
+        if (isCasting()) return
         cancelBufferingRecovery()
         bufferingRecoveryJob = serviceScope.launch {
-            delay(20_000L) // Conservative timeout for initial buffering
+            delay(20_000L)
             val activePlayer = player ?: return@launch
             if (activePlayer.playbackState == Player.STATE_BUFFERING && activePlayer.playWhenReady) {
                 retryCurrentItem("buffer_timeout")
@@ -963,7 +1340,58 @@ class AudioService : MediaLibraryService() {
         }
     }
 
+    private fun scheduleCastBufferingRecovery() {
+        // Don't stack multiple watchdog jobs — one is enough.
+        if (castBufferingRecoveryJob?.isActive == true) return
+        cancelCastBufferingRecovery()
+        val startMs = castBufferingStartMs.takeIf { it >= 0L } ?: run {
+            castBufferingStartMs = SystemClock.elapsedRealtime()
+            castBufferingStartMs
+        }
+        castBufferingRecoveryJob = serviceScope.launch {
+            // Poll every 5s. On each tick, check how long we've been buffering since the
+            // original start time — not since the last BUFFERING state event. This means
+            // transient IDLE→BUFFERING cycles don't restart the 35s window.
+            while (isActive) {
+                delay(5_000L)
+                val activePlayer = player ?: return@launch
+                if (!isCasting()) return@launch
+
+                val elapsed = SystemClock.elapsedRealtime() - startMs
+                val state = activePlayer.playbackState
+                val pwr = activePlayer.playWhenReady
+
+                // If we reached READY, disarm and exit.
+                if (state == Player.STATE_READY) {
+                    castBufferingStartMs = -1L
+                    return@launch
+                }
+
+                Log.d(TAG, "Svc cast watchdog tick: elapsed=${elapsed}ms state=$state pwr=$pwr")
+
+                if (elapsed >= CAST_BUFFERING_TIMEOUT && pwr &&
+                    (state == Player.STATE_BUFFERING || state == Player.STATE_IDLE)) {
+                    Log.w(TAG, "Svc cast buffering timeout triggered after ${elapsed}ms")
+                    castBufferingStartMs = -1L
+                    retryCurrentItem("cast_buffer_timeout")
+                    return@launch
+                }
+            }
+        }
+    }
+
+    private fun cancelBufferingRecovery() {
+        bufferingRecoveryJob?.cancel()
+        bufferingRecoveryJob = null
+    }
+
+    private fun cancelCastBufferingRecovery() {
+        castBufferingRecoveryJob?.cancel()
+        castBufferingRecoveryJob = null
+    }
+
     private fun startStallRecovery() {
+        if (isCasting()) return
         val activePlayer = player ?: return
         lastObservedPositionMs = activePlayer.currentPosition.coerceAtLeast(0L)
         lastPositionRealtimeMs = SystemClock.elapsedRealtime()
@@ -996,7 +1424,7 @@ class AudioService : MediaLibraryService() {
             val currentSequence = if (manifest is HlsManifest) manifest.mediaPlaylist.mediaSequence else -1L
             val targetDurationMs = if (manifest is HlsManifest) manifest.mediaPlaylist.targetDurationUs / 1000 else 6000L
             
-            // If HLS sequence has advanced, the playlist is updating. This is the strongest sign of health.
+            // If HLS sequence has advanced, the playlist is updating.
             if (currentSequence != -1L && currentSequence > lastObservedSequenceNumber) {
                 lastObservedSequenceNumber = currentSequence
                 lastPositionRealtimeMs = nowRealtime
@@ -1013,28 +1441,17 @@ class AudioService : MediaLibraryService() {
                 return@launch
             }
             
-            // If we are in READY and position is not moving, but we are near the live edge, it might be normal.
-            // We use a very conservative threshold (30s or 4x target duration) to avoid false positives.
             val stallThresholdMs = (targetDurationMs * 4).coerceAtLeast(30_000L)
             val stallDuration = nowRealtime - lastPositionRealtimeMs
             
             if (stallDuration >= stallThresholdMs) {
-                Log.w(TAG, "Svc stall detected! duration=${stallDuration}ms position=$currentPosition buffer=$bufferedPosition seq=$currentSequence threshold=${stallThresholdMs}ms")
+                Log.w(TAG, "Svc stall detected! duration=${stallDuration}ms position=$currentPosition threshold=${stallThresholdMs}ms")
                 retryCurrentItem("stall_ready")
                 return@launch
             }
             
-            if (stallDuration % 5000L < 500L) {
-                Log.d(TAG, "Svc monitoring potential stall: duration=${stallDuration}ms pos=$currentPosition buffer=$bufferedPosition seq=$currentSequence")
-            }
-            
             scheduleStallCheck()
         }
-    }
-
-    private fun cancelBufferingRecovery() {
-        bufferingRecoveryJob?.cancel()
-        bufferingRecoveryJob = null
     }
 
     private fun cancelStallRecovery() {
@@ -1050,6 +1467,8 @@ class AudioService : MediaLibraryService() {
     private inner class MetadataForwardingPlayer(val basePlayer: Player) : androidx.media3.common.ForwardingPlayer(basePlayer) {
         private var overrideMetadata: MediaMetadata? = null
         private val listeners = mutableListOf<Player.Listener>()
+
+        fun isCasting(): Boolean = basePlayer is CastPlayer
 
         fun setOverrideMetadata(metadata: MediaMetadata?) {
             if (overrideMetadata == metadata) return

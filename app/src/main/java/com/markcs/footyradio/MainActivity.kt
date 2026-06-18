@@ -5,7 +5,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -46,7 +46,7 @@ import com.markcs.footyradio.ui.components.MiniPlayer
 import com.markcs.footyradio.ui.theme.SwiftRadioTheme
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -137,6 +137,8 @@ class MainActivity : ComponentActivity() {
                                     aTeam = state.liveScoreATeam,
                                     isBuffering = state.isBuffering,
                                     isLive = state.isLive,
+                                    isCasting = state.isCasting,
+                                    castDeviceName = state.castDeviceName,
                                     currentPositionProvider = { vm.currentPositionMs },
                                     durationMs = state.durationMs,
                                     onPlayPauseClick = { vm.togglePlayPause() },
@@ -190,6 +192,8 @@ class MainActivity : ComponentActivity() {
                                         liveScore = state.liveScore,
                                         isPlaying = state.isPlaying,
                                         isLive = state.isLive,
+                                        isCasting = state.isCasting,
+                                        castDeviceName = state.castDeviceName,
                                         hTeam = state.liveScoreHTeam,
                                         aTeam = state.liveScoreATeam,
                                         onPlayPauseClick = { vm.togglePlayPause() }

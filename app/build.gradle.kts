@@ -55,6 +55,8 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer.hls)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.datasource.okhttp)
+    implementation(libs.androidx.media3.cast)
+    implementation(libs.play.services.cast.framework)
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
@@ -65,6 +67,7 @@ dependencies {
     implementation(libs.coil.android)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.splashscreen)
+    implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
