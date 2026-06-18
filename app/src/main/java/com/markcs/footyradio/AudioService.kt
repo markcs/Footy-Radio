@@ -118,7 +118,7 @@ class AudioService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "/"
         private const val TAG = "AudioService"
-        private const val CAST_BUFFERING_TIMEOUT = 12_000L
+        private const val CAST_BUFFERING_TIMEOUT = 35_000L
     }
 
     private val playerListener = object : Player.Listener {
@@ -509,6 +509,17 @@ class AudioService : MediaLibraryService() {
             castBufferingStartMs = -1L
             cancelCastBufferingRecovery()
 
+            // Re-read playWhenReady from the cast player at this point rather than using the
+            // value captured before the coroutine launched. resolveStreamUrl() takes ~1-2s over
+            // the network, and the user may have pressed Stop during that time. Honouring the
+            // current intent avoids the cast device restarting audio the user just stopped.
+            // For fallback retries: read from cast (local is already cleared).
+            // For initial switch: also re-read from local if still available, else use captured value.
+            val currentPlayWhenReady = when {
+                isFallbackRetry -> cast.playWhenReady
+                else -> local.playWhenReady.takeIf { local.currentMediaItem != null } ?: playWhenReady
+            }
+
             // Swap player in session
             val wrappedPlayer = MetadataForwardingPlayer(cast)
             player = wrappedPlayer
@@ -516,9 +527,9 @@ class AudioService : MediaLibraryService() {
 
             // Set single item and play at live edge.
             cast.setMediaItem(castItem, /* startPositionMs= */ 0L)
-            cast.playWhenReady = playWhenReady
+            cast.playWhenReady = currentPlayWhenReady
             cast.prepare()
-            cast.play()
+            if (currentPlayWhenReady) cast.play()
 
             if (!isFallbackRetry) {
                 // Stop and clear local player only on initial cast switch.
@@ -528,7 +539,7 @@ class AudioService : MediaLibraryService() {
             }
             
             updateDisplayMetadata()
-            scheduleCastBufferingRecovery()
+            if (currentPlayWhenReady) scheduleCastBufferingRecovery()
         }
     }
 
