@@ -100,6 +100,9 @@ class PlayerViewModel(
     private var positionPollingJob: Job? = null
     private var squiggleJob: Job? = null
     private var lastKnownMetadata: MediaMetadata = MediaMetadata.Builder().build()
+    // Set true when the user explicitly stops playback. Cleared on the next explicit play.
+    // Prevents the CastPlayer's post-stop IDLE(playWhenReady=true) from showing as buffering.
+    private var userIntendedStop = false
 
     private val castContext: CastContext? by lazy {
         try {
@@ -228,6 +231,7 @@ class PlayerViewModel(
         val stationIndex = uiState.stations.indexOf(station)
         if (stationIndex < 0) return
 
+        userIntendedStop = false
         hasUserSelectedStation = true
         resetTrackInfo()
         uiState = uiState.copy(currentStation = station)
@@ -244,7 +248,14 @@ class PlayerViewModel(
 
     fun togglePlayPause() {
         withController { ctrl ->
-            if (ctrl.playWhenReady) {
+            // Use userIntendedStop rather than ctrl.playWhenReady to decide the branch.
+            // When casting, the Cast SDK resets playWhenReady=true after stop, which would
+            // cause ctrl.playWhenReady to incorrectly indicate "playing" even after a stop.
+            val effectivelyPlaying = if (uiState.isCasting) !userIntendedStop && ctrl.playWhenReady
+                                     else ctrl.playWhenReady
+
+            if (effectivelyPlaying) {
+                userIntendedStop = true
                 if (ctrl.isCurrentMediaItemLive || ctrl.duration <= 0) {
                     ctrl.pause()
                     ctrl.stop()
@@ -252,14 +263,23 @@ class PlayerViewModel(
                 } else {
                     ctrl.pause()
                 }
+                publishState(ctrl)
             } else {
-                if (ctrl.playbackState == Player.STATE_IDLE) {
-                    resetTrackInfo()
-                    ctrl.prepare()
+                // Resume: when casting, the CastPlayer clears its media item on stop, so
+                // ctrl.play() alone does nothing — we must reload the station.
+                val station = uiState.currentStation
+                if (uiState.isCasting && station != null) {
+                    playStation(station)
+                } else {
+                    userIntendedStop = false
+                    if (ctrl.playbackState == Player.STATE_IDLE) {
+                        resetTrackInfo()
+                        ctrl.prepare()
+                    }
+                    ctrl.play()
+                    publishState(ctrl)
                 }
-                ctrl.play()
             }
-            publishState(ctrl)
         }
     }
 
@@ -344,7 +364,8 @@ class PlayerViewModel(
         _rawState.value = RawPlaybackState(
             playWhenReady = controller.playWhenReady,
             isPlaying = controller.isPlaying,
-            isBuffering = controller.playWhenReady &&
+            isBuffering = !userIntendedStop &&
+                controller.playWhenReady &&
                 (controller.playbackState == Player.STATE_BUFFERING || controller.playbackState == Player.STATE_IDLE),
             mediaId = controller.currentMediaItem?.mediaId,
             metadata = metadata,
@@ -399,7 +420,7 @@ class PlayerViewModel(
                 val station = resolveStation(raw.mediaId)
                 uiState = uiState.copy(
                     currentStation = station,
-                    isPlaying = raw.playWhenReady,
+                    isPlaying = raw.isPlaying || (raw.playWhenReady && raw.isBuffering),
                     isBuffering = raw.isBuffering,
                     isLive = raw.isLive,
                     durationMs = raw.durationMs,

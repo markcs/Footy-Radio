@@ -101,6 +101,9 @@ class AudioService : MediaLibraryService() {
     // Wall-clock time (SystemClock.elapsedRealtime) when cast buffering first started for this
     // stream. Reset to -1 when the cast stream reaches READY or is replaced.
     private var castBufferingStartMs: Long = -1L
+    // True when the user explicitly stopped playback while casting. Used in switchToLocalPlayer
+    // to avoid auto-resuming on the phone when the cast session ends after a user-initiated stop.
+    private var userStoppedWhileCasting: Boolean = false
     private val audioManager: AudioManager by lazy {
         getSystemService(AudioManager::class.java)
     }
@@ -118,7 +121,7 @@ class AudioService : MediaLibraryService() {
     companion object {
         private const val ROOT_ID = "/"
         private const val TAG = "AudioService"
-        private const val CAST_BUFFERING_TIMEOUT = 35_000L
+        private const val CAST_BUFFERING_TIMEOUT = 12_000L
     }
 
     private val playerListener = object : Player.Listener {
@@ -211,6 +214,13 @@ class AudioService : MediaLibraryService() {
                     cancelBufferingRecovery()
                     cancelCastBufferingRecovery()
                     castBufferingStartMs = -1L
+                    // If we reach READY while casting and playWhenReady is false, the user
+                    // explicitly stopped — record that so switchToLocalPlayer doesn't auto-resume.
+                    if (isCasting() && player?.playWhenReady == false) {
+                        userStoppedWhileCasting = true
+                    } else if (isCasting() && player?.playWhenReady == true) {
+                        userStoppedWhileCasting = false
+                    }
                     startStallRecovery()
                 }
                 Player.STATE_BUFFERING -> {
@@ -508,6 +518,8 @@ class AudioService : MediaLibraryService() {
             // always measures from when THIS stream started loading, not a previous one.
             castBufferingStartMs = -1L
             cancelCastBufferingRecovery()
+            // A new stream being cast means the user intends to play — clear the stop flag.
+            if (!isFallbackRetry) userStoppedWhileCasting = false
 
             // Re-read playWhenReady from the cast player at this point rather than using the
             // value captured before the coroutine launched. resolveStreamUrl() takes ~1-2s over
@@ -549,7 +561,10 @@ class AudioService : MediaLibraryService() {
         if (player is MetadataForwardingPlayer && !(player as MetadataForwardingPlayer).isCasting()) return
 
         Log.d(TAG, "Switching to LocalPlayer")
-        val playWhenReady = cast.playWhenReady
+        // Don't trust cast.playWhenReady — the Cast SDK resets it to true after stop().
+        // Instead use userStoppedWhileCasting which was set when we saw READY(pwr=false) on cast.
+        val playWhenReady = !userStoppedWhileCasting
+        userStoppedWhileCasting = false
 
         // Swap to local player first so the session is updated immediately
         val wrappedPlayer = MetadataForwardingPlayer(local)
@@ -1353,7 +1368,7 @@ class AudioService : MediaLibraryService() {
             // original start time — not since the last BUFFERING state event. This means
             // transient IDLE→BUFFERING cycles don't restart the 35s window.
             while (isActive) {
-                delay(5_000L)
+                delay(2_000L)
                 val activePlayer = player ?: return@launch
                 if (!isCasting()) return@launch
 
