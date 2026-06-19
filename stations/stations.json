@@ -12,6 +12,16 @@
       "website": "https://www.novafm.com.au/melbourne"
     },
     {
+      "name": "Triple M Melbourne",
+      "website": "https://www.triplem.com.au/melbourne",
+      "streamURLs": [
+            "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8?"
+      ],
+      "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/mmm.png",
+      "desc": "Triple M Melbourne",
+      "longDesc": ""
+    },
+    {
       "desc": "",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/Gold1043.png",
       "longDesc": "",
