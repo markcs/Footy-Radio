@@ -90,6 +90,9 @@ class AudioService : MediaLibraryService() {
     private var lastAppliedArtworkKey: String? = null
     
     private var retryCount = 0
+    // When true, MetadataForwardingPlayer.getPlayerError() returns null so that Android Auto
+    // (and any other MediaSession controller) never sees the error while a fallback is loading.
+    private var suppressPlayerError = false
     private var lastObservedPositionMs: Long = 0L
     private var lastPositionRealtimeMs: Long = 0L
     private var lastObservedSequenceNumber: Long = -1L
@@ -211,6 +214,7 @@ class AudioService : MediaLibraryService() {
             when (playbackState) {
                 Player.STATE_READY -> {
                     retryCount = 0
+                    suppressPlayerError = false
                     cancelBufferingRecovery()
                     cancelCastBufferingRecovery()
                     castBufferingStartMs = -1L
@@ -224,6 +228,7 @@ class AudioService : MediaLibraryService() {
                     startStallRecovery()
                 }
                 Player.STATE_BUFFERING -> {
+                    suppressPlayerError = false
                     if (isCasting()) {
                         // Record the very first time we enter BUFFERING for this cast stream.
                         // We intentionally do NOT reschedule on repeated BUFFERING events —
@@ -483,13 +488,7 @@ class AudioService : MediaLibraryService() {
                 .build()
 
             // Strictly use application/x-mpegURL for HLS on Chromecast
-            val mimeType = when {
-                resolvedContentType?.contains("mpegurl", ignoreCase = true) == true -> MimeTypes.APPLICATION_M3U8
-                finalUrl.contains(".m3u8") || finalUrl.contains(".m3u") -> MimeTypes.APPLICATION_M3U8
-                resolvedContentType?.contains("mpeg", ignoreCase = true) == true -> MimeTypes.AUDIO_MPEG
-                finalUrl.contains(".mp3") || finalUrl.contains("/mp3") || finalUrl.endsWith(";") -> MimeTypes.AUDIO_MPEG
-                else -> null
-            }
+            val mimeType = inferMimeType(finalUrl, resolvedContentType)
 
             val castItem = currentMediaItem.buildUpon()
                 .setUri(finalUrl)
@@ -890,68 +889,23 @@ class AudioService : MediaLibraryService() {
     }
 
     /**
-     * Promote the service to foreground as soon as it is started (before Media3's
-     * MediaNotificationManager tries to do it). This prevents the
-     * ForegroundServiceStartNotAllowedException that occurs when the notification manager
-     * attempts startForegroundService() while the app is in the background (Android 12+).
-     */
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        ensureForeground()
-        return super.onStartCommand(intent, flags, startId)
-    }
-
-    private fun ensureForeground() {
-        val channelId = "footy_radio_playback"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NotificationManager::class.java)
-            if (nm.getNotificationChannel(channelId) == null) {
-                nm.createNotificationChannel(
-                    NotificationChannel(channelId, "Playback", NotificationManager.IMPORTANCE_LOW)
-                )
-            }
-        }
-        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, channelId)
-                .setSmallIcon(R.drawable.ic_play)
-                .setContentTitle(getString(R.string.app_name))
-                .setOngoing(true)
-                .build()
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-                .setSmallIcon(R.drawable.ic_play)
-                .setContentTitle(getString(R.string.app_name))
-                .setOngoing(true)
-                .build()
-        }
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-            } else {
-                startForeground(1, notification)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "ensureForeground: startForeground failed (app may be backgrounding)", e)
-        }
-    }
-
-    /**
-     * Suppress ForegroundServiceStartNotAllowedException from Media3's notification manager.
-     * This is thrown when the player transitions to READY while the app is in the background
-     * (e.g. during a cast fallback stream switch). The cast audio continues uninterrupted —
-     * we just can't update the notification at that moment.
+     * Suppress ForegroundServiceStartNotAllowedException from Media3's notification manager
+     * specifically during cast operations. This exception is thrown if the player transitions
+     * to READY while the app is in the background (common during cast fallback stream switches).
      */
     @Suppress("DEPRECATION")
     override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
         try {
             super.onUpdateNotification(session, startInForegroundRequired)
         } catch (e: Exception) {
-            // ForegroundServiceStartNotAllowedException is only available as a class on API 31+
-            // but the message is consistent — catch broadly and log only non-trivially.
-            if (e.javaClass.simpleName == "ForegroundServiceStartNotAllowedException") {
-                Log.d(TAG, "onUpdateNotification: suppressed foreground-start-not-allowed (app in background)")
+            // Only suppress if we are casting and it's the specific background-start error.
+            val isCast = isCasting()
+            val isBgStartError = e.javaClass.simpleName == "ForegroundServiceStartNotAllowedException"
+            
+            if (isCast && isBgStartError) {
+                Log.d(TAG, "onUpdateNotification: suppressed background-start error during cast")
             } else {
-                Log.w(TAG, "onUpdateNotification: unexpected error", e)
+                throw e
             }
         }
     }
@@ -1269,6 +1223,10 @@ class AudioService : MediaLibraryService() {
                 val nextIndex = activeIndex + 1
                 Log.w(TAG, "Svc attempting fallback stream for '${station.name}' index=$nextIndex reason=$reason")
                 
+                // Suppress the error from reaching the MediaSession (and Android Auto) while
+                // the fallback is loading. Cleared in onPlaybackStateChanged once BUFFERING/READY.
+                suppressPlayerError = true
+                
                 val nextStreamUrl = station.streamURLs[nextIndex]
                 if (isCasting()) {
                     castingStreamIndex = nextIndex
@@ -1276,14 +1234,21 @@ class AudioService : MediaLibraryService() {
                     switchToCastPlayer(nextStreamUrl)
                 } else {
                     currentStreamIndex = nextIndex
+                    // Re-derive MIME type from the new URL — do NOT inherit from currentItem,
+                    // which may carry the previous stream's MIME (e.g. application/x-mpegURL)
+                    // that would cause ExoPlayer to misparse the fallback stream entirely.
                     val updatedItem = currentItem.buildUpon()
                         .setUri(nextStreamUrl)
+                        .setMimeType(inferMimeType(nextStreamUrl, resolvedContentType = null))
                         .build()
-                    performLocalRetry(updatedItem, 1000L)
+                    performLocalRetry(updatedItem, 1000L, isFallback = true)
                 }
                 return
             }
         }
+
+        // No more fallbacks — make sure any suppression is cleared before the error propagates.
+        suppressPlayerError = false
 
         // No more fallbacks, perform standard retry
         if (isCasting()) {
@@ -1316,25 +1281,57 @@ class AudioService : MediaLibraryService() {
         return if (!stationName.isNullOrBlank()) stations.firstOrNull { it.name == stationName } else null
     }
 
-    private fun performLocalRetry(mediaItem: MediaItem, delayMs: Long) {
+    /**
+     * Infers the correct MIME type for a stream URL, preferring a resolved Content-Type header
+     * when available, then falling back to URL heuristics.
+     *
+     * Note: for AAC streams we return the literal "audio/aac" rather than MimeTypes.AUDIO_AAC
+     * (which resolves to "audio/mp4a-latm"). Chromecast's default receiver rejects mp4a-latm for
+     * raw AAC+/HE-AAC streams with "Invalid Request", whereas "audio/aac" routes correctly.
+     * ExoPlayer likewise handles "audio/aac" fine for local playback.
+     */
+    private fun inferMimeType(url: String, resolvedContentType: String?): String? = when {
+        resolvedContentType?.contains("mpegurl", ignoreCase = true) == true -> MimeTypes.APPLICATION_M3U8
+        url.contains(".m3u8") || url.contains(".m3u") || url.contains(".am3u8") -> MimeTypes.APPLICATION_M3U8
+        resolvedContentType?.contains("mpeg", ignoreCase = true) == true -> MimeTypes.AUDIO_MPEG
+        url.contains(".mp3") || url.contains("/mp3") || url.endsWith(";") -> MimeTypes.AUDIO_MPEG
+        resolvedContentType?.contains("aac", ignoreCase = true) == true -> "audio/aac"
+        url.contains(".aac") -> "audio/aac"
+        else -> null
+    }
+
+    private fun performLocalRetry(mediaItem: MediaItem, delayMs: Long, isFallback: Boolean = false) {
         cancelRetry()
         retryJob = serviceScope.launch {
-            try {
-                player?.release()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error releasing player during retry", e)
+            if (isFallback) {
+                // For fallback streams we MUST NOT release the player or call stop() — both
+                // transition to STATE_IDLE which Android Auto interprets as the session ending,
+                // causing it to navigate away from the now-playing screen.
+                // After a player error, ExoPlayer accepts setMediaItem directly without stop().
+                delay(delayMs)
+                val activePlayer = player ?: return@launch
+                activePlayer.setMediaItem(mediaItem)
+                activePlayer.prepare()
+                activePlayer.play()
+            } else {
+                // Standard retry path: full player teardown and rebuild.
+                try {
+                    player?.release()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error releasing player during retry", e)
+                }
+                player = null
+                basePlayer = null
+
+                delay(delayMs)
+
+                // Re-initialize from scratch
+                initializePlayer()
+                val freshPlayer = player ?: return@launch
+                freshPlayer.setMediaItem(mediaItem)
+                freshPlayer.prepare()
+                freshPlayer.play()
             }
-            player = null
-            basePlayer = null
-            
-            delay(delayMs)
-            
-            // Re-initialize from scratch
-            initializePlayer()
-            val freshPlayer = player ?: return@launch
-            freshPlayer.setMediaItem(mediaItem)
-            freshPlayer.prepare()
-            freshPlayer.play()
         }
     }
 
@@ -1505,6 +1502,14 @@ class AudioService : MediaLibraryService() {
             super.removeListener(listener)
             listeners.remove(listener)
         }
+
+        /**
+         * Return null while a fallback stream is loading so that the MediaSession never forwards
+         * the error to Android Auto (which would show "Source error" and navigate away from the
+         * now-playing screen). The flag is cleared as soon as the fallback enters BUFFERING/READY.
+         */
+        override fun getPlayerError(): PlaybackException? =
+            if (suppressPlayerError) null else super.getPlayerError()
 
         override fun getMediaMetadata(): MediaMetadata {
             val baseMetadata = super.getMediaMetadata()

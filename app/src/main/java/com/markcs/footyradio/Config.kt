@@ -5,8 +5,7 @@ import androidx.compose.ui.graphics.Color
 object Config {
     val gradientColor: Color = Color.White
 
-//    const val stationsURL = "https://markcs.github.io/Footy-Radio/stations/stations.json"
-    const val stationsURL = "https://raw.githubusercontent.com/markcs/Footy-Radio/refs/heads/chromecast_1/stations/stations.json"
+    const val stationsURL = "https://markcs.github.io/Footy-Radio/stations/stations.json"
 
     const val hideNextPreviousButtons = false
     const val enableSearch = true // Toggle to show/hide search bar on the Stations Screen
