@@ -64,6 +64,8 @@
       "longDesc": "",
       "name": "Fox FM",
       "streamURLs": [
+        "https://sa46.scastream.com.au/3fox_128",
+        "https://sa46.scastream.com.au/3fox1019_128/playlist.m3u8",
         "https://sa46.scastream.com.au/live/3fox_128.stream/playlist.m3u8"
       ],
       "website": "https://hit.listnr.com/melbourne/"
