@@ -6,7 +6,8 @@
       "longDesc": "",
       "name": "Nova 100",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128x",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128.aac",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100_AAC128",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_100.mp3"
       ],
       "website": "https://www.novafm.com.au/melbourne"
@@ -15,6 +16,7 @@
       "name": "Triple M Melbourne",
       "website": "https://www.triplem.com.au/melbourne",
       "streamURLs": [
+            "https://sa47.scastream.com.au/3mmm_128",
             "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8?"
       ],
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/mmm.png",
@@ -28,6 +30,7 @@
       "name": "GOLD 104.3",
       "streamURLs": [
         "https://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043AAC.m3u8",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043AAC.aac",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/ARN_GOLD1043.mp3"
       ],
       "website": "https://www.gold1043.com.au/"
@@ -50,6 +53,7 @@
       "name": "Smooth FM",
       "streamURLs": [
         "https://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915_AAC128.m3u8",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915_AAC128.AAC",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/SMOOTH915.mp3"
       ],
       "website": "https://smooth.com.au/station/smoothfm915"
@@ -101,6 +105,7 @@
       "longDesc": "",
       "name": "3AW",
       "streamURLs": [
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.mp3"
       ],
       "website": "https://www.3aw.com.au"
@@ -111,6 +116,7 @@
       "longDesc": "",
       "name": "Totally Radio - Hits",
       "streamURLs": [
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_HITS_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_HITS_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed5"
@@ -121,7 +127,8 @@
       "longDesc": "",
       "name": "Totally Radio - Pop",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.mp3"
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.mp3",
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.m3u8"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed6"
     },
@@ -131,6 +138,7 @@
       "longDesc": "",
       "name": "Totally Radio - Greatest Hits",
       "streamURLs": [
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_GRTST_HITS_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_GRTST_HITS_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836"
@@ -141,6 +149,7 @@
       "longDesc": "",
       "name": "Totally Radio - Easy",
       "streamURLs": [
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_EASY_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_EASY_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836"
@@ -151,6 +160,7 @@
       "longDesc": "",
       "name": "Totally Radio - Rock",
       "streamURLs": [
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_ROCK_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_ROCK_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37838"
@@ -161,7 +171,8 @@
       "longDesc": "",
       "name": "Triple M 80s",
       "streamURLs": [
-        "https://sa46.scastream.com.au/live/280s_128.stream/playlist.m3u8"
+        "https://sa46.scastream.com.au/380s_128",
+        "https://sa46.scastream.com.au/live/380s_128.stream/playlist.m3u8"
       ],
       "website": "https://www.triplem.com.au/80s"
     },
@@ -171,19 +182,10 @@
       "longDesc": "",
       "name": "Triple M 90s",
       "streamURLs": [
+        "https://sa46.scastream.com.au/390s_128",
         "https://sa46.scastream.com.au/live/290s_128.stream/playlist.m3u8"
       ],
       "website": "https://www.triplem.com.au/90s"
-    },
-    {
-      "desc": "",
-      "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/rockfm952.png",
-      "longDesc": "",
-      "name": "ROCK FM",
-      "streamURLs": [
-        "https://nashe1.hostingradio.ru/rock-128.mp3"
-      ],
-      "website": "http://www.rockfm.ru/"
     },
     {
       "desc": "",
@@ -191,6 +193,7 @@
       "longDesc": "",
       "name": "Chill Pop Hits",
       "streamURLs": [
+        "https://sa46.scastream.com.au/7chillpophits_128",
         "https://sa46.scastream.com.au/live/7chillpophits_128.stream/playlist.m3u8"
       ],
       "website": "https://play.listnr.com/station/chill-pop-hits"
