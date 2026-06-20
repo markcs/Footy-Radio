@@ -118,7 +118,6 @@
       "longDesc": "",
       "name": "Totally Radio - Hits",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_HITS_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_HITS_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed5"
@@ -129,8 +128,7 @@
       "longDesc": "",
       "name": "Totally Radio - Pop",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.mp3",
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.m3u8"
+        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_POP_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed6"
     },
@@ -140,7 +138,6 @@
       "longDesc": "",
       "name": "Totally Radio - Greatest Hits",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_GRTST_HITS_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_GRTST_HITS_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836"
@@ -151,7 +148,6 @@
       "longDesc": "",
       "name": "Totally Radio - Easy",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_EASY_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_EASY_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836"
@@ -162,7 +158,6 @@
       "longDesc": "",
       "name": "Totally Radio - Rock",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_ROCK_S01.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/T_RAD_ROCK_S01.mp3"
       ],
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37838"
