@@ -802,7 +802,8 @@ class AudioService : MediaLibraryService() {
                 else -> currentItem.mediaMetadata.artworkUri?.toString()
             }
 
-            val existingMeta = activePlayer.playlistMetadata
+            val wrappedPlayer = player as? MetadataForwardingPlayer
+            val existingMeta = wrappedPlayer?.currentOverrideMetadata ?: activePlayer.playlistMetadata
             val textChanged = existingMeta.title?.toString().orEmpty() != displayTitle.orEmpty() ||
                 existingMeta.artist?.toString().orEmpty() != displayArtist.orEmpty()
             val artworkChanged = artworkKey != lastAppliedArtworkKey
@@ -852,10 +853,11 @@ class AudioService : MediaLibraryService() {
             }
 
             val playlistMeta = metaBuilder.build()
-            activePlayer.setPlaylistMetadata(playlistMeta)
+            if (artworkChanged) {
+                activePlayer.setPlaylistMetadata(playlistMeta)
+            }
 
             // Use the ForwardingPlayer to update metadata without playlist churn
-            val wrappedPlayer = player as? MetadataForwardingPlayer
             if (wrappedPlayer != null) {
                 if (displayTitle != null || displayArtist != null) {
                     wrappedPlayer.setOverrideMetadata(playlistMeta)
@@ -1478,19 +1480,31 @@ class AudioService : MediaLibraryService() {
      */
     private inner class MetadataForwardingPlayer(val basePlayer: Player) : androidx.media3.common.ForwardingPlayer(basePlayer) {
         private var overrideMetadata: MediaMetadata? = null
+        val currentOverrideMetadata: MediaMetadata?
+            get() = overrideMetadata
         private val listeners = mutableListOf<Player.Listener>()
 
         fun isCasting(): Boolean = basePlayer is CastPlayer
 
         fun setOverrideMetadata(metadata: MediaMetadata?) {
             if (overrideMetadata == metadata) return
+            
+            val artworkChanged = metadata?.artworkUri != overrideMetadata?.artworkUri ||
+                    !java.util.Arrays.equals(metadata?.artworkData, overrideMetadata?.artworkData)
+            
             overrideMetadata = metadata
             
             val currentMetadata = getMediaMetadata()
             listeners.forEach { 
                 it.onMediaMetadataChanged(currentMetadata)
-                it.onPlaylistMetadataChanged(currentMetadata)
+                if (artworkChanged) {
+                    it.onPlaylistMetadataChanged(currentMetadata)
+                }
             }
+        }
+
+        override fun getPlaylistMetadata(): MediaMetadata {
+            return overrideMetadata ?: super.getPlaylistMetadata()
         }
 
         override fun addListener(listener: Player.Listener) {

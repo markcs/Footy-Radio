@@ -13,9 +13,10 @@
         <item name="postSplashScreenTheme">@style/Theme.SwiftRadio</item>
     </style>
 
-    <style name="Theme.MediaRoute" parent="Theme.AppCompat.Light">
-        <item name="android:colorBackground">#FFFFFFFF</item>
-        <item name="android:windowBackground">#FFFFFFFF</item>
-        <item name="isLightTheme">true</item>
+    <style name="Theme.MediaRoute" parent="Theme.AppCompat">
+        <item name="android:colorBackground">#FF212121</item>
+        <item name="android:windowBackground">#FF212121</item>
+        <item name="isLightTheme">false</item>
+        <item name="mediaRouteButtonTint">@android:color/white</item>
     </style>
 </resources>
