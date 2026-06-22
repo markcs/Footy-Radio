@@ -1,7 +1,7 @@
 {
   "station": [
     {
-      "desc": "",
+      "desc": "Melbourne's Favourite Hit Music Station",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/Nova100.png",
       "longDesc": "",
       "name": "Nova 100",
@@ -17,14 +17,14 @@
       "website": "https://www.triplem.com.au/melbourne",
       "streamURLs": [
             "https://sa47.scastream.com.au/3mmm_128",
-            "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8?"
+            "https://sa47.scastream.com.au/live/3mmm_128.stream/playlist.m3u8"
       ],
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/mmm.png",
       "desc": "Triple M Melbourne",
       "longDesc": ""
     },
     {
-      "desc": "",
+      "desc": "Melbourne's Good Times and Great Classic Hits",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/Gold1043.png",
       "longDesc": "",
       "name": "GOLD 104.3",
@@ -36,7 +36,7 @@
       "website": "https://www.gold1043.com.au/"
     },
     {
-      "desc": "",
+      "desc": "Make Up Your Own Mind",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/K1011.png",
       "longDesc": "",
       "name": "KIIS 1011",
@@ -47,7 +47,7 @@
       "website": "https://www.kiis1011.com.au/"
     },
     {
-      "desc": "",
+      "desc": "Your feel good station",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/smoothfm915.jpg",
       "longDesc": "",
       "name": "Smooth FM",
@@ -59,19 +59,18 @@
       "website": "https://smooth.com.au/station/smoothfm915"
     },
     {
-      "desc": "",
+      "desc": "Your mates on radio, it's Melbourne's favourite show",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/fox1019.png",
       "longDesc": "",
       "name": "Fox FM",
       "streamURLs": [
-        "https://sa46.scastream.com.au/3fox_128",
-        "https://sa46.scastream.com.au/3fox1019_128/playlist.m3u8",
-        "https://sa46.scastream.com.au/live/3fox_128.stream/playlist.m3u8"
+        "https://sa46.scastream.com.au/live/3fox_128.stream/playlist.m3u8",
+        "https://sa46.scastream.com.au/3fox_128"
       ],
       "website": "https://hit.listnr.com/melbourne/"
     },
     {
-      "desc": "",
+      "desc": "Stay informed, stay curious",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/ABCRadioNational.png",
       "longDesc": "",
       "name": "ABC RN Victoria",
@@ -81,7 +80,7 @@
       "website": "https://abc.net.au/"
     },
     {
-      "desc": "",
+      "desc": "Melbourne is full of stories that deserve a home. That home is here.",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/ABC-774-Melbourne.png",
       "longDesc": "",
       "name": "774 ABC",
@@ -92,7 +91,7 @@
       "website": "https://abc.net.au/radio/melbourne/"
     },
     {
-      "desc": "",
+      "desc": "Melbourne’s Home of Sport",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/sen.png",
       "longDesc": "",
       "name": "1116 SEN",
@@ -102,18 +101,17 @@
       "website": "http://www.sen.com.au/"
     },
     {
-      "desc": "",
+      "desc": "Melbourne’s Number 1",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/3aw.png",
       "longDesc": "",
       "name": "3AW",
       "streamURLs": [
-        "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.m3u8",
         "https://playerservices.streamtheworld.com/api/livestream-redirect/3AW.mp3"
       ],
       "website": "https://www.3aw.com.au"
     },
     {
-      "desc": "",
+      "desc": "All The Hits",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/totally_radio_hits.jpg",
       "longDesc": "",
       "name": "Totally Radio - Hits",
@@ -123,7 +121,7 @@
       "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed5"
     },
     {
-      "desc": "",
+      "desc": "Fresh Pop Now",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/totally_radio_pop.jpg",
       "longDesc": "",
       "name": "Totally Radio - Pop",
@@ -133,7 +131,7 @@
       "website": "https://totallyradio.com.au/channel?id=6965f4ad0381e846558b6ed6"
     },
     {
-      "desc": "",
+      "desc": "Legends only",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/totally_radio_greatesthits.png",
       "longDesc": "",
       "name": "Totally Radio - Greatest Hits",
@@ -143,7 +141,7 @@
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836"
     },
     {
-      "desc": "",
+      "desc": "Chill Out",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/totally_radio_easy.jpg",
       "longDesc": "",
       "name": "Totally Radio - Easy",
@@ -153,7 +151,7 @@
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37836"
     },
     {
-      "desc": "",
+      "desc": "For Those About to Rock",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/totally_radio_rock.jpg",
       "longDesc": "",
       "name": "Totally Radio - Rock",
@@ -163,7 +161,7 @@
       "website": "https://totallyradio.com.au/channel?id=6965f68ab43052879be37838"
     },
     {
-      "desc": "",
+      "desc": "Rocks the 80s",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/mmm-80s.jpg",
       "longDesc": "",
       "name": "Triple M 80s",
@@ -174,7 +172,7 @@
       "website": "https://www.triplem.com.au/80s"
     },
     {
-      "desc": "",
+      "desc": "Rock the 90s",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/mmm-90s.jpg",
       "longDesc": "",
       "name": "Triple M 90s",
@@ -185,7 +183,7 @@
       "website": "https://www.triplem.com.au/90s"
     },
     {
-      "desc": "",
+      "desc": "Today's Soft Pop Vibes",
       "imageURL": "https://markcs.github.io/Footy-Radio/stations/icons/chill_pop_hits.jpg",
       "longDesc": "",
       "name": "Chill Pop Hits",
@@ -194,6 +192,6 @@
         "https://sa46.scastream.com.au/live/7chillpophits_128.stream/playlist.m3u8"
       ],
       "website": "https://play.listnr.com/station/chill-pop-hits"
-    }
-  ]
+     }
+   ]
 }
