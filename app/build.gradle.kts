@@ -4,6 +4,14 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+fun gitCommitCount() = providers.exec {
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.get().trim().toInt()
+
+fun gitShortHash() = providers.exec {
+    commandLine("git", "rev-parse", "--short", "HEAD")
+}.standardOutput.asText.get().trim()
+
 android {
     namespace = "com.markcs.footyradio"
     compileSdk {
@@ -16,8 +24,8 @@ android {
         applicationId = "com.markcs.footyradio"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = gitCommitCount()
+        versionName = "1.0-${gitShortHash()}"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
