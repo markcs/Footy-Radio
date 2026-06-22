@@ -1,6 +1,6 @@
 # Footy Radio
 
-An open-source Android radio app tailored for Australian football fans. Stream Melbourne's major radio stations and catch live AFL scores — all in one place.
+An open-source Android radio app tailored for Australian football fans. Stream radio stations and catch live AFL scores — all in one place - with Android Auto support.
 
 Forked from [Swift Radio Android](https://github.com/fethica/Swift-Radio-Android) by Fethi, built with Kotlin, Jetpack Compose, and Media3.
 
